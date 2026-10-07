@@ -95,7 +95,7 @@ Core on every server connects to the launcher's bus and sends what the others sh
 - **Tablist.** Every server shows every player. Players on another server are added as list entries only (no entity), with their skin, grey ping and the server's mark. Nautical Ranks keeps formatting the local ones; Core formats the remote ones the same way.
 - **Joins and leaves.** A move between servers is not a leave and a join; Core shows "moved to the mining world" instead.
 
-The bus is line delimited JSON over loopback TCP. Every connection starts with the server's name and an HMAC over a nonce with the key from `kronwerke/bus.key`, which the launcher creates and only processes in the container can read. The protocol and the settings are in [BUS.md](BUS.md); Kronwerke runs both servers in the network `kronwerke` with everything on (`sync.players=true` too) and `bus.port=25580`.
+The bus is line delimited JSON over loopback TCP. Every connection starts with the server's name and an HMAC over a nonce with the key from `kronwerke/bus.key`, which the launcher creates and only processes in the container can read. The protocol and the settings are in [BUS.md](BUS.md); Kronwerke runs both servers in the network `kronwerke` (labels Hauptwelt and Minenwelt) with chat, joins, tab list and lists on and `bus.port=25580`; `sync.players` follows once Core carries players between the servers.
 
 ## CPU and memory
 
