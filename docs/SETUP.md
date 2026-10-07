@@ -112,6 +112,7 @@ The key stays in `launcher/link.key`; the controller keeps only its hash.
 | `bus.port` | empty | A loopback port mods of a network connect to (Kronwerke Core does); see [BUS.md](BUS.md) |
 | `cpu.pin`, `cpu.balance` | `false` | CPU shares as hard limits, and moving them by load |
 | `container.memory` | empty | GB the servers may use together; empty reads the container's limit |
+| `public.host` | empty | The address players connect to, for mods that move players between servers |
 | `timezone` | empty | Time zone of scheduled tasks and backup names, like `Europe/Berlin`; empty is the container's |
 
 Per server, in `launcher/servers/<name>.properties`:

@@ -12,7 +12,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -285,10 +284,13 @@ public final class Fleet {
 
     /** The panel's stop: every server down, then the launcher ends. */
     public void shutdown() {
+        // every other server first, the first one last: players on a side world are sent home as
+        // they log out, and the first server must still be there to take them
         List<Server> all = servers();
-        Collections.reverse(all);
+        Server first = all.isEmpty() ? null : all.get(0);
         List<Thread> ts = new ArrayList<>();
         for (Server s : all) {
+            if (s == first) continue;
             Thread t = new Thread(s::leave, "leave-" + s.name());
             t.start();
             ts.add(t);
@@ -299,6 +301,14 @@ public final class Fleet {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+        if (first != null) {
+            try {
+                Thread.sleep(all.size() > 1 ? 1500 : 0); // the last messages over the bus
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            first.leave();
         }
         network.close();
         schedule.stop();
@@ -331,15 +341,19 @@ public final class Fleet {
             List<Server> all = servers();
             List<Server> wanted = all.stream().filter(Server::wanted).toList();
             event("update", null, "pack update: stopping " + wanted.size() + " servers");
-            List<Server> reverse = new ArrayList<>(all);
-            Collections.reverse(reverse);
+            // side servers first, so their players reach the first server before it stops
             List<Thread> ts = new ArrayList<>();
-            for (Server s : reverse) {
+            for (Server s : all) {
+                if (s == all.get(0)) continue;
                 Thread t = new Thread(s::stop, "stop-" + s.name());
                 t.start();
                 ts.add(t);
             }
             for (Thread t : ts) t.join();
+            if (!all.isEmpty()) {
+                if (all.size() > 1) Thread.sleep(1500);
+                all.get(0).stop();
+            }
             for (Server s : all) s.set(Server.State.UPDATING, "pack");
             try {
                 updatePack();

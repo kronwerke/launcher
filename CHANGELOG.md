@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- World resets: the schedule's new action "reset" (for one server, never the first) and a button on a server's page. The players are sent to another server of the network first when a mod on the bus can (`evacuate`), the server stops, its world moves to `<world>.reset-<time>`, the reset world before that is deleted, the server starts with a new world. An alert "reset" for the webhook.
+- Tasks every few days: `kind=days` with `every` and the first day, like every three days at 05:00. Warnings up to a day before (1440 minutes).
+- `public.host`: the address players connect to; mods get it with every server's port and role, for moves between servers. The bus also tells a mod when its world is reset next.
+- Stopping the container or a pack update stops the other servers first and the first one last, so players on a side world reach it before it stops.
+- `public.host` and `timezone` can be changed from the console.
+
 ## 0.6.1
 
 - The "stopped" alert only comes for a stop that stays, not for every restart.

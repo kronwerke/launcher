@@ -67,7 +67,7 @@ A wrong key ends the connection with `{"op": "error", "text": "wrong key"}`. A s
 
 **What the launcher sends.**
 
-`welcome` right after signing in, and the same shape as `policy` whenever a setting, a server or a connection of the network changes:
+`welcome` right after signing in, and the same shape as `policy` whenever a setting, a server or a connection of the network changes. Each server comes with its `role`, the `host` players connect to (`public.host`) and its game `port`, so a mod can move players there with Minecraft's transfer packet; `reset` is when this server's world is reset next by the clock, or null:
 
 ```json
 {"op": "welcome", "server": "mining", "label": "Mining", "color": "#8bb6dc",
@@ -87,6 +87,7 @@ Then, from the other servers of the network, each with `from`, `label` and `colo
 | `say` | `who`, `text` | Someone in the web console wrote to the players |
 | `sent` | `id`, `delivered` | Answer to a `send` with an `id` |
 | `pong` | `t` | Answer to `ping` |
+| `evacuate` | | The world is reset now: send every player to another server, then answer `evacuated`. The launcher waits up to a minute |
 | `error` | `text` | The last line was not understood |
 
 **What the mod sends.**
@@ -99,6 +100,7 @@ Then, from the other servers of the network, each with `from`, `label` and `colo
 | `send` | `to` (a server or `*`), `topic`, `data`, optional `id` | Delivered as `message` to that server's mod. Topics starting with `player.` need `sync.players` on both ends |
 | `event` | `text` | A line in the console's timeline |
 | `ping` | `t` | `pong` |
+| `evacuated` | | Answer to `evacuate`: everyone is gone |
 
 The bus survives nothing: a launcher update closes it and opens it again. Mods reconnect (Kronwerke Core tries every few seconds) and send `players` again.
 
