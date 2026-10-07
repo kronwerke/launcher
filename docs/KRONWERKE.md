@@ -58,18 +58,19 @@ A missing `kronwerke/servers` folder means "only main, with the old keys from la
 
 ## Moving between servers
 
-Minecraft 1.21 has this built in: the server sends a transfer packet with a host and a port, and the client connects there, keeping its identity. Before that the server can store cookies on the client, and the next server can ask for them. Both target servers have `accepts-transfers=true` (`transfers=true` in their launcher file).
+Minecraft 1.21 has this built in: the server sends a transfer packet with a host and a port, and the client connects there, keeping its identity. Both servers have `accepts-transfers=true` (`transfers=true` in their launcher file) and `sync.players=true`.
 
-The move, from main to mining:
+The way in is the Minenportal: a frame of Grubenrahmen like the Nether's, lit with a source gem, anywhere on main. The move, as Kronwerke Core 0.18 does it:
 
-1. The player uses the way to the mining world (a gate at spawn; *open*: gate, item or command).
-2. Core on main sends the client `kronwerke:transfer_begin` with the target's name. The client starts the transfer animation (below), which hides everything that follows.
-3. Core saves the player, writes the player file and everything that travels with it to `kronwerke/shared/players/<uuid>/`, and writes a lock: `owner=mining, since=<time>`.
-4. Core stores a cookie on the client: player uuid, target, time, signed with the bus key (HMAC-SHA256).
-5. Core sends the transfer packet to `kronwerke.net:27212`.
-6. The client reconnects. Core on mining asks for the cookie during configuration. No valid cookie, a wrong uuid or older than 60 seconds: the player is kicked with "Join through kronwerke.net". So nobody joins the mining server directly.
-7. Core on mining waits until the lock says `mining` and the handoff files are complete, loads the player from them, places them at the mining world's arrival point and tells the client to play the arrival half of the animation.
-8. Back to main the same way. A player who disconnects on mining is moved back on their next join: main sees the lock pointing at mining, loads the handoff (written by mining on disconnect), and the player stands at the gate.
+1. A player stands in the portal for two and a half seconds; their client draws the charge (light rising, a beam coming down).
+2. Core on main saves the player and sends the whole state over the bus to mining (`player.handoff`): the player file (inventory, ender chest, effects, every mod's attachments), advancements, statistics, Sophisticated Backpacks' contents. It remembers that the player is away and where they stand when they come back: in front of their portal.
+3. Core on mining writes all of that as its own files, with the player at the arrival place, notes that it expects this player for 90 seconds, and answers `player.ready`.
+4. Only then main sends the transfer packet to `kronwerke.net:27212` (`public.host` and the server's port). The client's overlay hides the reconnect: stars rushing toward "Minenwelt".
+5. Mining lets in only players it expects (operators may always), so nobody joins it directly with an old state. The arrival plays the white flash.
+6. Back the same way through any portal on mining; the player stands in front of the portal they went through. Every 30 seconds, on logout and when mining stops, mining sends the state home (`player.checkpoint`, `player.home`), so main always has the newest. Main keeps its own waystones of the player (they point at main's world).
+7. Items thrown into a portal come out on the other side: at the arrival place, or in front of the thrower's portal at home.
+
+**The reset.** Every three days at 05:00 (a launcher task, warnings a day, an hour, ten minutes and a minute before, a countdown in the tab list): the launcher asks Core to send everyone home, stops mining, moves its world aside (the one before that is deleted) and starts it with a new world and a new arrival place.
 
 **What travels.** The player file (inventory, ender chest, attachments of every mod, which covers Curios, origins, Iron's Spells and our own stages) travels as a whole. That is not enough, because some mods keep a player's things in world data:
 
