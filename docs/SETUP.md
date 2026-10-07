@@ -31,24 +31,51 @@ For a Pterodactyl style panel where the startup command is fixed and runs `java 
 
 The key stays in `kronwerke/link.key` on the server. The bot keeps only its hash. A new key (a new server, or a deleted file) has to be accepted again; `!link revoke <fingerprint>` locks an old one out.
 
+## The console
+
+1. In `kronwerke/launcher.properties`: `console.port=9900` (an allocation of the container).
+2. Cloudflare, zone kronwerke.com: `console` proxied to the container's address; an origin rule "console.kronwerke.com to port 9900"; SSL "Full"; Authenticated Origin Pulls on.
+3. `kronwerke reload` (or a start of the container). The panel's console shows the setup code; open https://console.kronwerke.com/setup. Details in [CONSOLE.md](CONSOLE.md).
+
+## A second server
+
+1. An allocation for its game port (and one for its voice chat).
+2. `kronwerke/servers/mining.properties`:
+
+   ```
+   dir=servers/mining
+   port=27212
+   rcon.port=25576
+   voice.port=9901
+   memory=8G
+   cpu.share=3
+   order=20
+   role=mining
+   ```
+
+3. `kronwerke reload`. The launcher makes the folder and its links and starts the server; the console shows it at once.
+
 ## Everyday
 
 - **Pack update:** push to the pack repository, then `!mc restart update` (or `kronwerke update` in the console). The panel's own start also updates the pack.
 - **Crash:** the launcher starts Minecraft again after 15 seconds and the bot reports it. After three crashes in ten minutes it waits: `!mc logs 80`, fix, `!mc start`.
 - **Stop for maintenance:** `!mc stop` stops Minecraft and keeps the launcher and the link up. The panel's stop ends both.
-- **Launcher update:** `!mc launcher-update <jar url from the release> <sha256>`. The new jar is used from the next start of the container, for example the nightly schedule.
+- **Launcher update:** in the console (or `POST /api/launcher/update {"version": "v0.2.1"}`), or `!mc launcher-update <jar url from the release> <sha256>`. The new version takes over at once and the servers keep running.
 
 ## Settings
 
-Every key is in `kronwerke/launcher.properties` with a comment. Changes apply on the next start of the container.
+Every key is in `kronwerke/launcher.properties` with a comment. Changes apply on the next `kronwerke reload`.
 
 | Key | Default | What |
 | --- | --- | --- |
 | `pack.url` | the Kronwerke pack | packwiz `pack.toml`; empty turns updates off |
-| `memory` | `16G` | Minecraft's heap |
-| `jvm.args` | G1 flags | More flags for Minecraft |
+| `jvm.args` | G1 flags | Flags for every server |
 | `java` | empty | The java for Minecraft; empty is the launcher's |
-| `autostart` | `true` | Start Minecraft with the launcher |
-| `restart.on.crash` | `true` | Start again after a crash |
+| `bus.port` | `25580` | Loopback port Kronwerke Core will connect to |
+| `cpu.pin`, `cpu.balance` | `false` | CPU shares as hard limits, and moving them by load |
+| `container.memory` | empty | GB the servers may use together; empty reads the container's limit |
+| `console.*` | | See [CONSOLE.md](CONSOLE.md) |
+
+Per server, in `kronwerke/servers/<name>.properties`: `dir`, `port`, `rcon.port`, `voice.port`, `memory`, `jvm.args`, `cpu.share`, `autostart`, `restart.on.crash`, `order`, `role`. Memory and flags apply on that server's next start, the CPU share at once.
 | `link.url` | empty | The bot's link; empty turns it off |
 | `link.name` | `kronwerke` | How the bot calls this server |

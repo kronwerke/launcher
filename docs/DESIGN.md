@@ -103,12 +103,11 @@ The container has 9 vCores and 51 GB.
 
 **Memory** is fixed per start: heap from each server's config. A change applies on the server's next restart, and the console says so. The launcher keeps the sum of heaps plus 3 GB per server for the JVM's own memory below the container's limit and refuses a start that would break it.
 
-**CPU** can move while servers run. Each server has a share (main 6, mining 3). The launcher applies it in two ways:
+**CPU** can move while servers run. Each server has a share (main 6, mining 3). The launcher applies it as CPU affinity (a nice value can only get worse without privileges, so it is not used):
 
-- **Priority:** the server with the larger share gets the better nice value, so when both want CPU, main wins.
-- **Cores:** with `cpu.pin=true`, each server is limited to its share of logical CPUs through `taskset`. Only useful when the host lets us see which CPUs the container gets; the launcher reads `/sys/fs/cgroup/cpu.max` and the CPU list at start and turns pinning off when it cannot tell.
+- - **Cores:** with `cpu.pin=true`, each server is limited to its share of logical CPUs through `taskset`. Only useful when the host lets us see which CPUs the container gets; the launcher reads `/sys/fs/cgroup/cpu.max` and the CPU list at start and turns pinning off when it cannot tell.
 
-**Auto balance** (off by default, switch in the console): every 10 seconds the launcher reads each server's MSPT from Core over the bus. When main is above 40 ms for a minute and mining is below 25 ms, one share moves from mining to main; it moves back when main has been below 30 ms for ten minutes. Every move is in the audit log and in the console's timeline.
+**Auto balance** (off by default, switch in the console): every 10 seconds the launcher reads each server's tick time (`neoforge tps` over RCON). When the busiest server averages above 40 ms over a minute and another one is below 25 ms with more than one share, one share moves. At most one move a minute. Shares do not move back by themselves; the console shows them and sets them back. Every move is in the timeline.
 
 ## The console
 
