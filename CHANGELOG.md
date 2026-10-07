@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- The palette (Ctrl K) is a command line too: `start|stop|restart|kill [server]`, `run <server> <command>`, `/command`, `@server command`, `say`, `msg`, `kick`, `ban`, `pardon`, `op`, `deop`, `whitelist add|remove`, with Kronwerke Core `streamer add|remove`, `slots`, `bonus`, `invite`, `revoke`, and `pack update`, `reload`, `wait`, `go`, `open`, `console`, `new server`. Chains with `&&` (stop at an error) and `;` (carry on), Tab completes verbs, servers, players, streamers and pages, `help` lists everything, Alt and the arrow keys walk the history. Each step reports back in the palette.
+- Pairing a device: a signed in person gets a code (ten minutes, once) under Access; typed on another device at "pair it with a code", it makes that device a passkey of its own.
+- Members who linked their Minecraft name on Discord (pushed by the Kronwerke bot) show with the players and as "Linked on Discord" next to the streamers, newest marked, with a button to give them slots.
+
 ## 0.3.1
 
 - The season page also finds Kronwerke Core when its jar is called kronwerke-<version>.jar.
