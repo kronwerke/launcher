@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- The "stopped" alert only comes for a stop that stays, not for every restart.
+- `backup.keep` can be changed from the console.
+
 ## 0.6.0
 
 - Automation page: a schedule of restarts (with warnings to the players at chosen minutes before), stops, starts, commands, messages and backups, daily at a time on chosen weekdays or every few hours; run any task now. `timezone` sets the clock.

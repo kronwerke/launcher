@@ -240,7 +240,8 @@ public final class Fleet {
             }
             case STOPPED -> {
                 sessions.serverDown(s.name());
-                if (!updating) alerts.send("stop", s.name(), "stopped");
+                // a restart or a pack update is not worth a message, only a stop that stays
+                if (!updating && !s.wanted()) alerts.send("stop", s.name(), "stopped");
             }
             case RUNNING -> alerts.send("start", s.name(), "running");
             default -> {

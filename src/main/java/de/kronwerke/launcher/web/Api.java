@@ -43,7 +43,7 @@ final class Api {
     static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
             "ban ", "pardon ");
     static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
-            "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label");
+            "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label", "backup.keep");
 
     private final Web web;
     private final Fleet fleet;
@@ -753,6 +753,9 @@ final class Api {
                         }
                         case "sync.chat" -> {
                             if (!List.of("network", "server", "radius").contains(value)) throw new IllegalArgumentException("network, server or radius");
+                        }
+                        case "backup.keep" -> {
+                            if (!value.matches("[1-9][0-9]?")) throw new IllegalArgumentException("1 to 99");
                         }
                         case "chat.radius" -> {
                             if (!value.matches("[1-9][0-9]{0,3}")) throw new IllegalArgumentException("1 to 9999 blocks");
