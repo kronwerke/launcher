@@ -552,7 +552,11 @@ const EN = {
   "Minecraft, wie Mojang es liefert": "Minecraft as Mojang ships it",
   "Ein Proxy vor mehreren Servern": "A proxy in front of several servers",
   "Jede Jar, die du hochlädst": "Any jar you upload",
-  "Eigene Jar": "Custom jar"
+  "Eigene Jar": "Custom jar",
+  " ist abgestürzt": " crashed",
+  "Spieler öffnen": "Open player",
+  "letzte ": "last ",
+  " Spieler (1)": " player"
   };
 function T(s) {
   if (s == null) return s;
@@ -842,7 +846,8 @@ document.addEventListener("click", e => {
   const a = e.target.closest("a[data-link]");
   if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
   e.preventDefault();
-  go(a.getAttribute("href"));
+  const href = a.getAttribute("href");
+  if (href.includes("?")) { history.pushState(null, "", href); route(); } else go(href);
 });
 window.addEventListener("popstate", () => { if (S.session?.user) route(); });
 
@@ -875,7 +880,10 @@ function startStream() {
       if (S.overview.events.length > 200) S.overview.events.shift();
     }
     for (const f of listeners.event) f(d);
-    if (d.kind === "state") refreshOverview();
+    if (d.kind === "state") {
+      refreshOverview();
+      if (/^crashed/.test(d.text || "")) toast(d.server + T(" ist abgestürzt"), (d.text || "").replace(/^crashed:?\s*/, ""), true);
+    }
   });
   es.addEventListener("overview", e => {
     S.overview = JSON.parse(e.data);
@@ -952,7 +960,7 @@ function drawTrace(canvas, samples, color) {
   g.font = "500 11px Schibsted Grotesk, system-ui";
   g.fillText("50 ms", 6, y(50) - 5);
   g.fillStyle = "rgba(123, 116, 111, 0.9)";
-  const label = span >= 3540 ? "letzte Stunde" : "letzte " + Math.round(span / 60) + " min";
+  const label = span >= 3540 ? T("letzte Stunde") : T("letzte ") + Math.round(span / 60) + " min";
   g.fillText(label, w - g.measureText(label).width - 8, hgt - 8);
   if (pts.length < 2) {
     g.fillStyle = "rgba(170, 163, 155, 0.7)";
@@ -973,6 +981,7 @@ function drawTrace(canvas, samples, color) {
   g.strokeStyle = c;
   g.lineWidth = 1.6;
   g.stroke(path);
+  canvas._trace = { pts, x, y, w, hgt, c };
   const last = pts[pts.length - 1];
   g.fillStyle = c;
   g.beginPath(); g.arc(x(last.t), y(last.mspt), 3, 0, Math.PI * 2); g.fill();
@@ -1041,6 +1050,19 @@ function pageOverview(main) {
     put(cards, ...S.overview.servers.map(s => {
       const m = s.last?.mspt ?? -1;
       const canvas = h("canvas", { class: "trace", "aria-label": T("Tickzeit der letzten Stunde") });
+      const tip = h("div", { class: "tip", hidden: true });
+      canvas.addEventListener("mousemove", e => {
+        const tr = canvas._trace;
+        if (!tr || !tr.pts.length) return;
+        const rect = canvas.getBoundingClientRect(), mx = e.clientX - rect.left;
+        let best = tr.pts[0];
+        for (const p of tr.pts) if (Math.abs(tr.x(p.t) - mx) < Math.abs(tr.x(best.t) - mx)) best = p;
+        tip.hidden = false;
+        put(tip, h("b", null, fmt.num(best.mspt) + " ms"), " " + fmt.clock(best.t * 1000) + (best.players >= 0 ? ", " + best.players + T(" Spieler") : "") + (best.cpu >= 0 ? ", CPU " + fmt.num(best.cpu) + " %" : ""));
+        tip.style.left = Math.min(rect.width - 230, Math.max(0, tr.x(best.t) - 60)) + "px";
+        tip.style.top = Math.max(0, tr.y(best.mspt) - 34) + "px";
+      });
+      canvas.addEventListener("mouseleave", () => { tip.hidden = true; });
       const card = h("section", { class: "panel pulse", style: { "--c": colorOf(s.name) }, "data-server": s.name },
         h("div", { class: "pulse-top" },
           h("div", null,
@@ -1049,13 +1071,13 @@ function pageOverview(main) {
               h("span", { class: "state", "data-s": s.state }, (T(STATE_DE[s.state]) || s.state) + T(" seit ") + fmt.since(s.since))),
             h("div", { class: "pulse-meta" }, [s.detail, s.port ? "Port " + s.port : null, s.role && s.role !== s.name ? s.role : null].filter(Boolean).join(", "))),
           h("div", { class: "mspt", "data-health": s.state === "running" ? health(m) : "" },
-            h("b", null, s.state === "running" && m >= 0 ? fmt.num(m) : "?", h("small", null, "ms")),
+            h("b", null, s.state === "running" && m >= 0 ? fmt.num(m) : "-", h("small", null, "ms")),
             h("span", null, s.state === "running" && s.last?.tps >= 0 ? fmt.num(s.last.tps) + " TPS" : T("pro Tick")))),
-        canvas,
+        h("div", { class: "trace-wrap" }, canvas, tip),
         h("div", { class: "pulse-foot" },
           h("span", null, "CPU ", h("b", null, s.last?.cpu >= 0 ? fmt.num(s.last.cpu) + " %" : "?"), " ", spark(S.metrics[s.name] || [], "cpu", resolveColor(colorOf(s.name)))),
-          h("span", null, "RAM ", h("b", null, fmt.bytes(s.last?.rss)), " von ", s.memory || "?"),
-          h("span", null, h("b", null, s.players.length), s.players.length === 1 ? " Spieler" : T(" Spieler")),
+          h("span", null, "RAM ", h("b", null, fmt.bytes(s.last?.rss)), T(" von "), s.memory || "?"),
+          h("span", null, h("b", null, s.players.length), s.players.length === 1 ? (LANG === "de" ? " Spieler" : " player") : T(" Spieler")),
           s.players.length ? heads(s.players) : null,
           h("span", { class: "actions nowrap end" }, powerButtons(s, true))));
       metricsOf(s.name).then(ms => drawTrace(canvas, ms, colorOf(s.name))).catch(() => {});
@@ -1159,7 +1181,9 @@ function pageConsole(main, rest) {
     const c = cls ?? lineClass(text);
     const d = h("div", c ? { class: c } : null);
     if (which === "alle" && server) d.append(h("span", { class: "tag", style: { "--c": colorOf(server) } }, server));
-    d.append(text);
+    const m = /^(.*?<)([A-Za-z0-9_]{3,16})(>.*)$/.exec(text);
+    if (m && !cls) d.append(m[1], h("a", { href: "/spieler/alle?q=" + m[2], class: "who", "data-link": true, title: T("Spieler öffnen") }, m[2]), m[3]);
+    else d.append(text);
     return d;
   };
   const visible = t => (!onlyErrors || /error|warn/.test(lineClass(t))) && (!filter || t.toLowerCase().includes(filter));
@@ -1281,9 +1305,10 @@ function pageConsole(main, rest) {
 
 function pagePlayers(main, rest) {
   const tabs = [["alle", "Alle"], ["online", "Online"], ["whitelist", "Whitelist"], ["ops", "Operatoren"], ["gebannt", "Gebannt"]];
-  let tab = rest || "alle", q = "", data = null;
+  let tab = rest || "alle", q = new URLSearchParams(location.search).get("q") || "", data = null;
   const body = h("div", { class: "stack" });
-  const search = h("input", { type: "search", placeholder: T("Spieler suchen"), "aria-label": T("Spieler suchen") });
+  const search = h("input", { type: "search", value: q, placeholder: T("Spieler suchen"), "aria-label": T("Spieler suchen") });
+  q = q.toLowerCase();
   const seg = h("div", { class: "seg", role: "group" });
   main.append(header(T("Spieler"), T("Jeder, den der Server kennt: online, auf der Whitelist, Operatoren, Gebannte und wer in den letzten 30 Tagen da war."),
     search, can("players") ? h("button", { class: "btn primary", onclick: () => addToWhitelist() }, T("Zur Whitelist hinzufügen")) : null), seg, body);
@@ -1661,6 +1686,19 @@ function pageFiles(main, rest) {
         route();
       });
       const entries = d.entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+      const dropUpload = async files => {
+        for (const f of files) {
+          const buf = new Uint8Array(await f.arrayBuffer());
+          let s = "";
+          for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+          await run(f.name + T(" hochgeladen"), () => api("PUT", "/servers/" + server + "/files", { path: (path ? path + "/" : "") + f.name, data: btoa(s) }));
+        }
+        route();
+      };
+      main.ondragover = e => { e.preventDefault(); main.classList.add("dropping"); };
+      main.ondragleave = e => { if (e.target === main) main.classList.remove("dropping"); };
+      main.ondrop = e => { e.preventDefault(); main.classList.remove("dropping"); if (e.dataTransfer.files.length) dropUpload([...e.dataTransfer.files]); };
+      cleanup.push(() => { main.ondragover = main.ondragleave = main.ondrop = null; main.classList.remove("dropping"); });
       put(body, h("section", { class: "panel files" },
         h("header", null, crumbs, h("div", { class: "actions" }, up, h("button", { class: "btn small", onclick: () => up.click() }, svg(ICON.upload), T("Hochladen")))),
         entries.length ? h("table", null, h("tbody", null, entries.map(e => h("tr", null,
