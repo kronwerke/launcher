@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Who may use the console: people with passkeys, machines with API keys, sessions in
- * between. Everything is kept in kronwerke/console/access.json, secrets only as SHA-256
+ * between. Everything is kept in the console folder's access.json, secrets only as SHA-256
  * hashes. No passwords exist.
  * <p>
  * Passkeys are WebAuthn credentials checked here without a library: the browser hands over
@@ -50,6 +50,7 @@ final class Access {
     private final Path file;
     private final Path setupFile;
     private final String rpId;
+    private final String rpName;
     private final List<String> origins;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Object> data;
@@ -66,7 +67,8 @@ final class Access {
     private record Challenge(byte[] bytes, String purpose, Map<String, Object> context, long expires) {}
 
     @SuppressWarnings("unchecked")
-    Access(Path dir, String rpId, List<String> origins) throws IOException {
+    Access(Path dir, String rpId, List<String> origins, String rpName) throws IOException {
+        this.rpName = rpName;
         this.file = dir.resolve("access.json");
         this.setupFile = dir.resolve("setup.code");
         this.rpId = rpId;
@@ -319,7 +321,7 @@ final class Access {
         if (existing != null) for (Map<String, Object> k : passkeys(existing)) exclude.add(Json.map("type", "public-key", "id", k.get("id")));
         Map<String, Object> options = Json.map(
                 "challenge", b64(ch),
-                "rp", Json.map("id", rpId, "name", "Kronwerke Console"),
+                "rp", Json.map("id", rpId, "name", rpName),
                 "user", Json.map("id", b64(userId.getBytes(StandardCharsets.UTF_8)), "name", userName, "displayName", userName),
                 "pubKeyCredParams", List.of(Json.map("type", "public-key", "alg", -7L), Json.map("type", "public-key", "alg", -8L),
                         Json.map("type", "public-key", "alg", -257L)),

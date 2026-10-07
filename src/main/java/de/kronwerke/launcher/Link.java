@@ -56,7 +56,7 @@ public final class Link {
         this.root = root;
         this.fleet = fleet;
         this.server = fleet.main();
-        Path keyFile = root.resolve("kronwerke/link.key");
+        Path keyFile = Home.of(root).resolve("link.key");
         this.key = loadKey(keyFile);
         fleet.onState(this::sendState);
         server.onConsole(line -> {

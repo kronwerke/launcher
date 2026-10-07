@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+For everyone, not only Kronwerke.
+
+- Server types: `neoforge` (as before; the version from the pack or `neoforge=`), `jar` (Paper, Fabric, vanilla, any jar), `command` (any program, with `stop` and a `ready` pattern). RCON, EULA and server.properties only for Minecraft.
+- The launcher's files live in `launcher/`; an install with `kronwerke/` keeps it. Installed launcher jars in `launcher/jars` (`kronwerke/launcher` there).
+- Nothing Kronwerke in the defaults: `name` for the console's title and the launcher's lines, `console.host` must be set, `pack.url` and `bus.port` empty, `update.repo` for where updates come from, `link.name` defaults to `launcher`.
+- `transfers` sets accepts-transfers; a second server no longer gets it by itself. `share` and `own` choose what a second server links or copies.
+- The console speaks English and German (`console.language`), takes an accent colour (`console.accent`) and per server colours (`color`). The season page only shows with Kronwerke Core (`console.season`).
+- Java servers get `-Dlauncher.server`, `-Dlauncher.role`, `-Dlauncher.bus` and `-Dlauncher.bus.key` (were `kronwerke.*`).
+- `launcher status|start|stop|restart|update|reload` in the panel's console; `kronwerke ...` still works.
+
 ## 0.2.0
 
 More than one server, and the console.

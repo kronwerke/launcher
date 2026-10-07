@@ -117,6 +117,22 @@ public final class Server {
         }
     }
 
+    /** neoforge, jar or command. */
+    public String type() {
+        String t = cfg.get("type");
+        return t.isEmpty() ? "neoforge" : t;
+    }
+
+    /** A Minecraft server: EULA, server.properties, the "Done" line. */
+    public boolean minecraft() {
+        return !type().equals("command");
+    }
+
+    /** Commands go over RCON (rcon=false turns it off for a Minecraft server). */
+    public boolean rcon() {
+        return minecraft() && !cfg.get("rcon").equalsIgnoreCase("false");
+    }
+
     public Path properties() {
         return dir.resolve("server.properties");
     }
@@ -168,7 +184,7 @@ public final class Server {
     }
 
     void note(String msg) {
-        print("[Kronwerke] " + msg);
+        print(fleet.tag() + msg);
     }
 
     /** A launcher note in this server's console, for parts outside this package. */
@@ -183,7 +199,7 @@ public final class Server {
             since = Instant.now();
             lock.notifyAll();
         }
-        note("Minecraft " + s.name().toLowerCase() + (why.isEmpty() ? "" : ": " + why));
+        note((minecraft() ? "Minecraft " : "Process ") + s.name().toLowerCase() + (why.isEmpty() ? "" : ": " + why));
         fleet.changed(this);
         List<Runnable> ls;
         synchronized (stateListeners) {
@@ -294,6 +310,10 @@ public final class Server {
     /** Runs a command over RCON and returns the answer. */
     public String command(String cmd) throws IOException {
         if (state() != State.RUNNING) throw new IllegalStateException(name + " is " + state().name().toLowerCase());
+        if (!rcon()) {
+            if (!send(cmd)) throw new IOException("not running");
+            return "";
+        }
         return Rcon.command(properties(), cmd);
     }
 
@@ -307,12 +327,14 @@ public final class Server {
                 since = Instant.now();
             }
         }
-        note("Stopping Minecraft");
+        note("Stopping");
         fleet.changed(this);
-        p.send("stop");
+        String stop = cfg.get("stop").isEmpty() ? (minecraft() ? "stop" : "") : cfg.get("stop");
+        if (stop.isEmpty() || stop.equals("-")) p.process().destroy();
+        else p.send(stop);
         try {
             if (!p.process().waitFor(150, TimeUnit.SECONDS)) {
-                note("Minecraft did not stop in 150 seconds, killing it");
+                note("Did not stop in 150 seconds, killing it");
                 p.process().destroyForcibly();
                 p.process().waitFor(20, TimeUnit.SECONDS);
             }
@@ -363,7 +385,7 @@ public final class Server {
     private void supervise(Pump adopted) {
         try {
             if (adopted != null && adopted.process().isAlive()) {
-                note("Took over the running Minecraft (pid " + adopted.process().pid() + ")");
+                note("Took over the running process (pid " + adopted.process().pid() + ")");
                 adopted.attach(this::print);
                 fleet.applyCpu(this);
                 if (afterExit(waitFor(adopted))) return;
@@ -439,9 +461,11 @@ public final class Server {
     /** Prepare, start, wait for the exit. Integer.MIN_VALUE when it never started. */
     private int runOnce() throws InterruptedException {
         Pack.Info info;
+        List<String> cmd;
         try {
             info = fleet.ready(this);
             prepare();
+            cmd = fleet.commandLine(this, info);
         } catch (IOException | RuntimeException e) {
             synchronized (lock) {
                 detail = "preparing: " + e.getMessage();
@@ -450,12 +474,11 @@ public final class Server {
             return Integer.MIN_VALUE;
         }
 
-        List<String> cmd = fleet.commandLine(this, info);
         synchronized (lock) {
             // stopped while the pack was updating
             if (!wantRunning || leaving || detaching) return Integer.MIN_VALUE;
         }
-        if (!eulaAccepted()) {
+        if (minecraft() && !eulaAccepted()) {
             note("Minecraft's EULA is not accepted yet. Read https://aka.ms/MinecraftEULA, put eula=true into eula.txt, then start it again.");
             synchronized (lock) {
                 wantRunning = false;
@@ -466,7 +489,7 @@ public final class Server {
         Pump p;
         doneAt = 0;
         try {
-            set(State.STARTING, "pack " + info.version() + ", NeoForge " + info.neoforge());
+            set(State.STARTING, info == null ? type() : (info.version().isEmpty() ? "" : "pack " + info.version() + ", ") + "NeoForge " + info.neoforge());
             Process proc = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true).start();
             p = Pump.start(proc, name);
         } catch (IOException e) {
@@ -482,8 +505,9 @@ public final class Server {
         }
         metrics.reset();
         p.attach(this::print);
+        if (!minecraft() && cfg.get("ready").isEmpty()) set(State.RUNNING, "");
         fleet.applyCpu(this);
-        runningSoon(p);
+        if (rcon()) runningSoon(p);
         return waitFor(p);
     }
 
@@ -512,25 +536,43 @@ public final class Server {
 
     /** Reads the console for the moments that matter. */
     private void watch(String line) {
-        if (state() == State.STARTING) {
+        if (state() != State.STARTING) return;
+        String ready = cfg.get("ready");
+        if (!ready.isEmpty()) {
+            if (readyPattern(ready).matcher(line).find()) set(State.RUNNING, "");
+        } else if (rcon()) {
             // RCON comes up right after "Done"; commands only work from then on
             if (line.contains("RCON running on")) {
                 set(State.RUNNING, "");
             } else if (line.contains("Done (") && line.contains("For help, type")) {
                 doneAt = System.currentTimeMillis();
             }
+        } else if (minecraft() && line.contains("Done (") && line.contains("For help, type")) {
+            set(State.RUNNING, "");
         }
+    }
+
+    private Pattern ready;
+    private String readySource;
+
+    private Pattern readyPattern(String src) {
+        if (!src.equals(readySource)) {
+            ready = Pattern.compile(src);
+            readySource = src;
+        }
+        return ready;
     }
 
     /** Ports, RCON and the files a second server needs, before every start. */
     void prepare() throws IOException {
+        if (!minecraft()) return;
         Path props = properties();
         Map<String, String> set = new java.util.LinkedHashMap<>();
         if (!cfg.get("port").isEmpty()) set.put("server-port", cfg.get("port"));
         if (!cfg.get("rcon.port").isEmpty()) set.put("rcon.port", cfg.get("rcon.port"));
-        if (!"main".equals(cfg.get("role"))) set.put("accepts-transfers", "true");
+        if (!cfg.get("transfers").isEmpty()) set.put("accepts-transfers", cfg.get("transfers"));
         if (!set.isEmpty()) Properties.set(props, set);
-        Rcon.prepare(props);
+        if (rcon()) Rcon.prepare(props);
         if (!cfg.get("voice.port").isEmpty()) {
             Path voice = dir.resolve("config/voicechat/voicechat-server.properties");
             if (Files.isSymbolicLink(dir.resolve("config/voicechat"))) {

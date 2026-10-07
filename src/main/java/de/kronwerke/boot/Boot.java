@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * (see {@link Pump}) and a map of state handed from one launcher version to the next.
  * <p>
  * The launcher itself lives in {@code de.kronwerke.launcher} and is loaded in a class loader
- * of its own, from the jar named in {@code kronwerke/launcher/current} or else from this jar.
+ * of its own, from the jar named in {@code current} next to the installed jars, or else from this jar.
  * When it returns {@code "reload"}, the next version is loaded and takes over the running
  * servers without stopping them. Only JDK types and this package cross that line.
  * <p>
@@ -91,8 +91,8 @@ public final class Boot {
             if (r != null) r.run();
         }, "shutdown"));
 
-        Path dir = root().resolve("kronwerke/launcher");
         while (true) {
+            Path dir = jarDir(root());
             Path jar = chosenJar(dir);
             String result;
             try {
@@ -100,17 +100,29 @@ public final class Boot {
             } catch (Throwable t) {
                 if (jar == null || jar.equals(ownJar())) throw t;
                 // a broken update must not take the server down: back to the jar the panel started
-                OUT.println("[Kronwerke] Launcher " + jar.getFileName() + " failed to start (" + t + "), going back to the built in one");
+                OUT.println("[Launcher] " + jar.getFileName() + " failed to start (" + t + "), going back to the built in one");
                 Files.deleteIfExists(dir.resolve("current"));
                 continue;
             }
             if (!"reload".equals(result)) break;
-            OUT.println("[Kronwerke] Reloading the launcher");
+            OUT.println("[Launcher] Reloading");
         }
         System.exit(0);
     }
 
-    /** kronwerke/launcher/current names a jar in the same folder; anything else means this jar. */
+    /** Installed launcher jars: kronwerke/launcher for the first install, launcher/jars for any other. */
+    static Path jarDir(Path root) {
+        Path old = root.resolve("kronwerke/launcher");
+        if (Files.exists(root.resolve("kronwerke/launcher.properties"))) return old;
+        return root.resolve("launcher/jars");
+    }
+
+    /** current names a jar in the same folder; anything else means this jar. */
+    /** For tests: where jars are looked for. */
+    public static Path jarDirFor(Path root) {
+        return jarDir(root);
+    }
+
     /** For tests: the same choice as at start. */
     public static Path chosenJarFor(Path dir) {
         return chosenJar(dir);

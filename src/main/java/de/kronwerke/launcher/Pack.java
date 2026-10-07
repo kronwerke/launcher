@@ -49,16 +49,17 @@ public final class Pack {
         return m.find() ? m.group(1) : "";
     }
 
-    /** Fetches pack.toml and keeps a copy in kronwerke/pack.toml. */
+    /** Fetches pack.toml and keeps a copy in the launcher's folder. */
     public Info fetch(String url) throws IOException, InterruptedException {
         String body = get(url);
-        Files.writeString(root.resolve("kronwerke/pack.toml"), body, StandardCharsets.UTF_8);
+        Files.createDirectories(Home.of(root));
+        Files.writeString(Home.of(root).resolve("pack.toml"), body, StandardCharsets.UTF_8);
         return parse(body);
     }
 
     /** The pack as of the last update, or null. */
     public Info local() throws IOException {
-        Path p = root.resolve("kronwerke/pack.toml");
+        Path p = Home.of(root).resolve("pack.toml");
         return Files.exists(p) ? parse(Files.readString(p, StandardCharsets.UTF_8)) : null;
     }
 

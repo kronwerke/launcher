@@ -23,7 +23,7 @@ public final class AccessTests {
         int checks = 0;
         Path dir = Files.createTempDirectory("kwa");
         String origin = "https://console.example";
-        Access a = new Access(dir, "console.example", List.of(origin));
+        Access a = new Access(dir, "console.example", List.of(origin), "Test Console");
         String code = a.setupCode();
         check(code != null && Files.exists(dir.resolve("setup.code")), "a setup code while nobody exists");
         checks++;
@@ -85,7 +85,7 @@ public final class AccessTests {
         checks++;
 
         // a fresh Access from the same file keeps everything and has no setup code
-        Access again = new Access(dir, "console.example", List.of(origin));
+        Access again = new Access(dir, "console.example", List.of(origin), "Test Console");
         check(again.setupCode() == null && again.session(token) != null, "survives a restart");
         checks++;
         String inv = again.newInvite("mod", "Tomy", who.id());

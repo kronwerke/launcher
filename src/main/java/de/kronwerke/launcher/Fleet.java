@@ -35,13 +35,14 @@ public final class Fleet {
     static final long OVERHEAD_GB = 3;
 
     private final Path root;
+    private final Path home;
     private final Config cfg;
     private final String java;
     private final Pack pack;
     private final PrintStream out;
     private final Map<String, Server> servers = new LinkedHashMap<>();
     private final Object packLock = new Object();
-    private boolean neoforgeChecked;
+    private final java.util.Set<String> neoforgeChecked = new java.util.HashSet<>();
     private volatile boolean updating;
 
     private final CountDownLatch done = new CountDownLatch(1);
@@ -61,6 +62,7 @@ public final class Fleet {
 
     public Fleet(Path root, Config cfg, String java, PrintStream out) throws IOException {
         this.root = root;
+        this.home = Home.of(root);
         this.cfg = cfg;
         this.java = java;
         this.out = out;
@@ -72,6 +74,11 @@ public final class Fleet {
     }
 
     // ---- what others see ----
+
+    /** The launcher's own folder. */
+    public Path home() {
+        return home;
+    }
 
     public Path root() {
         return root;
@@ -112,7 +119,7 @@ public final class Fleet {
 
     /** File access inside a server's folder, with every key and the console's data hidden. */
     public ServerFiles files(Server s) {
-        Path k = root.resolve("kronwerke");
+        Path k = home;
         return new ServerFiles(s.dir(), k.resolve("link.key"), k.resolve("bus.key"), k.resolve("console"));
     }
 
@@ -130,9 +137,14 @@ public final class Fleet {
         else out.println("[" + server + "] " + line);
     }
 
+    /** How the launcher's own lines start: "[name] ", with name from launcher.properties. */
+    public String tag() {
+        return "[" + (cfg.get("name").isEmpty() ? "Launcher" : cfg.get("name")) + "] ";
+    }
+
     /** A note in the panel and in the timeline. */
     void note(String msg) {
-        out.println("[Kronwerke] " + msg);
+        out.println(tag() + msg);
         event("launcher", null, msg);
     }
 
@@ -296,28 +308,34 @@ public final class Fleet {
             Pack.Info before = pack.local();
             Pack.Info info = pack.fetch(url);
             pack.update(url);
-            neoforgeChecked = false;
+            neoforgeChecked.clear();
             event("update", null, "pack " + (before == null ? "?" : before.version()) + " to " + info.version());
         }
     }
 
     /**
-     * Everything a server needs before it starts: the pack on disk, NeoForge, and for a second
-     * server its links to the first one's files.
+     * Everything a server needs before it starts. A NeoForge server needs the pack on disk
+     * (or its own neoforge version) and NeoForge installed; a second server its links to the
+     * first one's files. Returns the pack, or null for a server without one.
      */
     Pack.Info ready(Server s) throws IOException {
-        Pack.Info info;
-        synchronized (packLock) {
-            info = pack.local();
-            if (info == null) throw new IOException("no pack.toml yet and pack.url is empty");
-            if (!neoforgeChecked) {
-                try {
-                    pack.ensureNeoForge(info.neoforge());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("interrupted");
+        Pack.Info info = null;
+        if (s.type().equals("neoforge")) {
+            synchronized (packLock) {
+                info = pack.local();
+                String version = !s.config().get("neoforge").isEmpty() ? s.config().get("neoforge") : info == null ? "" : info.neoforge();
+                if (version.isEmpty()) throw new IOException("no NeoForge version: set pack.url, or neoforge in the server's file");
+                if (info == null) info = new Pack.Info("", "", "", version);
+                else if (!version.equals(info.neoforge())) info = new Pack.Info(info.name(), info.version(), info.minecraft(), version);
+                if (!neoforgeChecked.contains(version)) {
+                    try {
+                        pack.ensureNeoForge(version);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("interrupted");
+                    }
+                    neoforgeChecked.add(version);
                 }
-                neoforgeChecked = true;
             }
         }
         if (!s.dir().equals(root)) link(s);
@@ -333,7 +351,12 @@ public final class Fleet {
     void link(Server s) throws IOException {
         Path dir = s.dir();
         Files.createDirectories(dir);
-        for (String name : SHARED) {
+        List<String> share = s.config().get("share").isEmpty()
+                ? (s.type().equals("neoforge") ? SHARED : List.of())
+                : List.of(s.config().get("share").split(","));
+        for (String raw : share) {
+            String name = raw.trim();
+            if (name.isEmpty() || name.equals("config")) continue;
             Path target = root.resolve(name), at = dir.resolve(name);
             if (!Files.exists(target)) continue;
             if (Files.isSymbolicLink(at)) continue;
@@ -346,8 +369,9 @@ public final class Fleet {
         if (!s.config().get("voice.port").isEmpty()) own.add("voicechat");
         own.replaceAll(String::trim);
         Path cfgDir = dir.resolve("config"), rootCfg = root.resolve("config");
-        Files.createDirectories(cfgDir);
-        if (Files.isDirectory(rootCfg)) {
+        boolean shareConfig = s.config().get("share").isEmpty() ? s.type().equals("neoforge") : share.stream().anyMatch(x -> x.trim().equals("config"));
+        if (shareConfig && Files.isDirectory(rootCfg)) {
+            Files.createDirectories(cfgDir);
             try (Stream<Path> entries = Files.list(rootCfg)) {
                 for (Path e : entries.toList()) {
                     String name = e.getFileName().toString();
@@ -362,7 +386,7 @@ public final class Fleet {
             }
         }
         Path eula = dir.resolve("eula.txt");
-        if (!Files.exists(eula) && Files.exists(root.resolve("eula.txt"))) Files.copy(root.resolve("eula.txt"), eula);
+        if (s.minecraft() && !Files.exists(eula) && Files.exists(root.resolve("eula.txt"))) Files.copy(root.resolve("eula.txt"), eula);
     }
 
     private static void copy(Path from, Path to) throws IOException {
@@ -386,11 +410,12 @@ public final class Fleet {
         long sum = 0;
         for (Server s : servers()) {
             if (s != starting && !s.wanted() && s.pid() == 0) continue;
-            sum += gigabytes(s.config().get("memory")) + OVERHEAD_GB;
+            long heap = gigabytes(s.config().get("memory"));
+            if (heap > 0) sum += heap + OVERHEAD_GB;
         }
         if (sum > limit) {
             throw new IOException("the servers would need " + sum + " GB with this one, the container has " + limit
-                    + " GB; lower a heap in kronwerke/servers");
+                    + " GB; lower a heap in " + root.relativize(home) + "/servers");
         }
     }
 
@@ -409,26 +434,45 @@ public final class Fleet {
         return n;
     }
 
-    /** How Minecraft is started for a server. */
-    List<String> commandLine(Server s, Pack.Info info) {
+    /**
+     * How a server is started. neoforge: java with NeoForge's argument file; jar: java -jar
+     * with the server's jar (Paper, Fabric, vanilla, anything that is a jar); command: the
+     * server's own command line, split at spaces, for everything else.
+     */
+    List<String> commandLine(Server s, Pack.Info info) throws IOException {
         Config sc = s.config();
         List<String> cmd = new ArrayList<>();
-        cmd.add(java);
+        String type = s.type();
+        if (type.equals("command")) {
+            for (String a : sc.get("command").split("\\s+")) if (!a.isBlank()) cmd.add(a);
+            if (cmd.isEmpty()) throw new IOException("type=command needs command=...");
+            return cmd;
+        }
+        cmd.add(sc.get("java").isEmpty() ? java : sc.get("java"));
         String mem = sc.get("memory");
         if (!mem.isEmpty()) {
             cmd.add("-Xms" + mem);
             cmd.add("-Xmx" + mem);
         }
         for (String a : (cfg.get("jvm.args") + " " + sc.get("jvm.args")).split("\\s+")) if (!a.isBlank()) cmd.add(a);
-        cmd.add("-Dkronwerke.server=" + s.name());
-        cmd.add("-Dkronwerke.role=" + (sc.get("role").isEmpty() ? s.name() : sc.get("role")));
+        cmd.add("-Dlauncher.server=" + s.name());
+        cmd.add("-Dlauncher.role=" + (sc.get("role").isEmpty() ? s.name() : sc.get("role")));
         if (!cfg.get("bus.port").isEmpty()) {
-            cmd.add("-Dkronwerke.bus=127.0.0.1:" + cfg.get("bus.port"));
-            cmd.add("-Dkronwerke.bus.key=" + root.resolve("kronwerke/bus.key"));
+            cmd.add("-Dlauncher.bus=127.0.0.1:" + cfg.get("bus.port"));
+            cmd.add("-Dlauncher.bus.key=" + home.resolve("bus.key"));
         }
-        if (Files.exists(s.dir().resolve("user_jvm_args.txt"))) cmd.add("@user_jvm_args.txt");
-        cmd.add("@" + root.relativize(pack.argsFile(info.neoforge())));
-        cmd.add("nogui");
+        if (type.equals("jar")) {
+            String jar = sc.get("jar");
+            if (jar.isEmpty()) throw new IOException("type=jar needs jar=...");
+            if (!Files.exists(s.dir().resolve(jar))) throw new IOException(jar + " is not in " + root.relativize(s.dir()));
+            cmd.add("-jar");
+            cmd.add(jar);
+        } else {
+            if (Files.exists(s.dir().resolve("user_jvm_args.txt"))) cmd.add("@user_jvm_args.txt");
+            cmd.add("@" + root.relativize(pack.argsFile(info.neoforge())));
+        }
+        String args = sc.get("args").isEmpty() ? "nogui" : sc.get("args");
+        for (String a : args.split("\\s+")) if (!a.isBlank() && !a.equals("-")) cmd.add(a);
         return cmd;
     }
 
@@ -544,16 +588,18 @@ public final class Fleet {
         long rss = Proc.rss(pid);
         double tps = -1, mspt = -1;
         int players = -1;
-        if (s.state() == Server.State.RUNNING) {
+        if (s.state() == Server.State.RUNNING && s.rcon()) {
             try {
                 List<String> names = Server.players(s.command("list"));
                 m.players(names);
                 players = names.size();
-                String t = s.command("neoforge tps");
-                double[] v = Metrics.tps(t);
-                mspt = v[0];
-                tps = v[1];
-                m.dimensions(Metrics.dimensions(t));
+                if (s.type().equals("neoforge")) {
+                    String t = s.command("neoforge tps");
+                    double[] v = Metrics.tps(t);
+                    mspt = v[0];
+                    tps = v[1];
+                    m.dimensions(Metrics.dimensions(t));
+                }
             } catch (IOException | RuntimeException ignored) {
                 // busy or starting; the next sample tries again
             }

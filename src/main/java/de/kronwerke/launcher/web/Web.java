@@ -35,7 +35,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 
 /**
- * console.kronwerke.com, served by the launcher itself: the page, its assets and the JSON
+ * The web console, served by the launcher itself: the page, its assets and the JSON
  * API under /api that the page and Elchi Ops use alike. Behind Cloudflare, with Cloudflare's
  * client certificate required, so a request straight to the container's address fails in the
  * TLS handshake.
@@ -66,19 +66,37 @@ public final class Web {
     public Web(Fleet fleet, Config cfg) throws IOException {
         this.fleet = fleet;
         this.cfg = cfg;
-        this.dir = fleet.root().resolve("kronwerke/console");
+        this.dir = fleet.home().resolve("console");
         Files.createDirectories(dir);
-        this.host = cfg.get("console.host").isEmpty() ? "console.kronwerke.com" : cfg.get("console.host");
+        this.host = cfg.get("console.host");
+        if (host.isEmpty()) throw new IOException("console.host is empty: the name the console is reached by");
         List<String> o = new ArrayList<>();
         o.add("https://" + host);
         for (String extra : cfg.get("console.origins").split(",")) if (!extra.isBlank()) o.add(extra.trim());
         this.origins = List.copyOf(o);
         String rp = cfg.get("console.rpid").isEmpty() ? host : cfg.get("console.rpid");
-        this.access = new Access(dir, rp, origins);
+        this.access = new Access(dir, rp, origins, title());
         this.audit = new Audit(dir.resolve("audit.jsonl"));
         this.behindCloudflare = !"off".equals(clientCa());
         this.assetVersion = Main.VERSION.replaceAll("[^A-Za-z0-9.]", "") + "-" + Long.toString(Instant.now().getEpochSecond(), 36);
         this.api = new Api(this);
+    }
+
+    /** The console's title: the launcher's name and "Console". */
+    String title() {
+        return (cfg.get("name").isEmpty() ? "Launcher" : cfg.get("name")) + " Console";
+    }
+
+    /** Whether the season page is there: Kronwerke Core in the first server's mods, or forced. */
+    boolean season() {
+        String s = cfg.get("console.season");
+        if (s.equals("on")) return true;
+        if (s.equals("off")) return false;
+        try (var files = Files.list(fleet.main().dir().resolve("mods"))) {
+            return files.anyMatch(p -> p.getFileName().toString().startsWith("kronwerke-core"));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private String clientCa() {
@@ -160,7 +178,9 @@ public final class Web {
     /** The single page; the app routes by path. */
     private void page(Req r) throws IOException {
         byte[] b = resource("index.html");
-        String html = new String(b, StandardCharsets.UTF_8).replace("{{v}}", assetVersion);
+        String lang = cfg.get("console.language").equals("de") ? "de" : "en";
+        String html = new String(b, StandardCharsets.UTF_8).replace("{{v}}", assetVersion).replace("{{lang}}", lang)
+                .replace("{{title}}", title().replace("&", "&amp;").replace("<", "&lt;"));
         r.header("Cache-Control", "no-store");
         r.send(200, "text/html; charset=utf-8", html.getBytes(StandardCharsets.UTF_8));
     }

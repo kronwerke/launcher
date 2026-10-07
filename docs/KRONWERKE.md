@@ -1,6 +1,6 @@
-# Design: more than one server, and the console
+# Kronwerke: more than one server
 
-Internal. The plan for launcher 0.2 and later: one launcher runs every Kronwerke server in one container, players move between them without noticing much, and console.kronwerke.com is where the team runs all of it. Decided with Samuel on 2026-10-07. Sections marked *open* are not settled yet.
+How [Kronwerke](https://kronwerke.com) uses the launcher, and what it plans: one launcher runs every Kronwerke server in one container, players move between them without noticing much, and console.kronwerke.com is where the team runs all of it. The moving of players is Kronwerke Core's part (a NeoForge mod), not the launcher's; it is described here because the two fit together. Sections marked *open* are not settled yet.
 
 ## Why not panel subservers
 
@@ -52,13 +52,13 @@ kronwerke/servers/mining.properties
 
 A missing `kronwerke/servers` folder means "only main, with the old keys from launcher.properties", so a 0.1 config keeps working unchanged.
 
-**One pack for all.** Every server gets the same pack, so a client that joins one can join all. `mining` does not run packwiz itself: its `mods`, `config`, `defaultconfigs` and `kubejs` are symlinks to the root's, so one update covers both. What differs per server is passed on the command line: `-Dkronwerke.server=mining -Dkronwerke.bus=127.0.0.1:25580`. Core reads it and switches its role (no obelisk, no spawn rules, its own reset).
+**One pack for all.** Every server gets the same pack, so a client that joins one can join all. `mining` does not run packwiz itself: its `mods`, `config`, `defaultconfigs` and `kubejs` are symlinks to the root's, so one update covers both. What differs per server is passed on the command line: `-Dlauncher.server=mining -Dlauncher.role=mining -Dlauncher.bus=127.0.0.1:25580`. Core reads it and switches its role (no obelisk, no spawn rules, its own reset).
 
 **Updates.** A pack update means: packwiz once, then restart every server, `main` last, so players move to main and the mining world's restart goes unnoticed. A single server can restart alone.
 
 ## Moving between servers
 
-Minecraft 1.21 has this built in: the server sends a transfer packet with a host and a port, and the client connects there, keeping its identity. Before that the server can store cookies on the client, and the next server can ask for them. Both target servers have `accepts-transfers=true`.
+Minecraft 1.21 has this built in: the server sends a transfer packet with a host and a port, and the client connects there, keeping its identity. Before that the server can store cookies on the client, and the next server can ask for them. Both target servers have `accepts-transfers=true` (`transfers=true` in their launcher file).
 
 The move, from main to mining:
 

@@ -153,6 +153,7 @@ final class Api {
             }
             case "season" -> {
                 need(r, "read");
+                if (!web.season()) throw new Web.Http(404, "no season here");
                 r.ok(season());
                 return;
             }
@@ -228,7 +229,10 @@ final class Api {
     // ---- signing in ----
 
     private Map<String, Object> session(Web.Req r) {
-        Map<String, Object> s = Json.map("host", web.host, "setup", access.setupCode() != null, "launcher", Main.VERSION);
+        String accent = web.cfg.get("console.accent");
+        Map<String, Object> s = Json.map("host", web.host, "setup", access.setupCode() != null, "launcher", Main.VERSION,
+                "title", web.title(), "language", web.cfg.get("console.language").equals("de") ? "de" : "en",
+                "accent", accent.matches("#[0-9a-fA-F]{6}") ? accent : "#e5b451", "season", web.season());
         if (r.who != null) {
             s.put("user", Json.map("id", r.who.id(), "name", r.who.name(), "role", r.who.role(), "kind", r.who.kind()));
             s.put("scopes", new ArrayList<>(r.who.scopes()));
@@ -323,7 +327,7 @@ final class Api {
                 "since", s.since().toString(), "pid", s.pid(), "starts", s.starts(), "wanted", s.wanted(),
                 "role", c.get("role"), "port", c.get("port"), "memory", c.get("memory"), "share", c.number("cpu.share", 1),
                 "autostart", c.flag("autostart"), "restartOnCrash", c.flag("restart.on.crash"), "jvmArgs", c.get("jvm.args"),
-                "dir", c.get("dir"), "last", last == null ? null : sampleJson(last), "players", s.metrics().players(),
+                "dir", c.get("dir"), "type", s.type(), "color", c.get("color").matches("#[0-9a-fA-F]{6}") ? c.get("color") : "", "last", last == null ? null : sampleJson(last), "players", s.metrics().players(),
                 "dimensions", s.metrics().dimensions());
     }
 
@@ -617,7 +621,7 @@ final class Api {
                 String version = Json.str(b, "version", "");
                 if (!version.matches("v\\d+\\.\\d+\\.\\d+")) throw new IllegalArgumentException("a version like v0.2.1");
                 act(r, "power", "launcher update", null, version, () -> {
-                    String base = Updater.PREFIX + version + "/";
+                    String base = Updater.prefix(fleet.config()) + version + "/";
                     String sums = get(base + "SHA256SUMS");
                     String sha = "";
                     for (String l : sums.split("\n")) {

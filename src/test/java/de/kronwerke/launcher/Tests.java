@@ -22,6 +22,7 @@ public final class Tests {
         keyIsStable();
         configWritesTemplate();
         serversFromAnOldInstall();
+        homeFolders();
         cpuSplit();
         answersFromMinecraft();
         propertiesKeepTheRest();
@@ -142,10 +143,10 @@ public final class Tests {
         Path dir = Files.createTempDirectory("kwl");
         Config c = Config.load(dir.resolve("kronwerke/launcher.properties"));
         check(Files.exists(dir.resolve("kronwerke/launcher.properties")), "template written");
-        check(c.get("bus.port").equals("25580") && !c.flag("cpu.pin") && c.get("link.url").isEmpty(), "defaults");
+        check(c.get("bus.port").isEmpty() && c.get("pack.url").isEmpty() && !c.flag("cpu.pin") && c.get("console.language").equals("en"), "defaults");
         Files.writeString(dir.resolve("kronwerke/launcher.properties"), "# hi\nlink.url=wss://x/link\n");
         Config d = Config.load(dir.resolve("kronwerke/launcher.properties"));
-        check(d.get("link.url").equals("wss://x/link") && d.get("link.name").equals("kronwerke"), "overrides on top of defaults");
+        check(d.get("link.url").equals("wss://x/link") && d.get("link.name").equals("launcher"), "overrides on top of defaults");
         d.set("link.name", "other");
         d.set("cpu.pin", "true");
         String file = Files.readString(dir.resolve("kronwerke/launcher.properties"));
@@ -156,17 +157,30 @@ public final class Tests {
     static void serversFromAnOldInstall() throws IOException {
         Path dir = Files.createTempDirectory("kwl");
         Files.createDirectories(dir.resolve("kronwerke"));
-        Files.writeString(dir.resolve("kronwerke/launcher.properties"), "memory=24G\nautostart=true\n");
+        Files.writeString(dir.resolve("kronwerke/launcher.properties"), "pack.url=https://x/pack.toml\nmemory=24G\nautostart=true\n");
         Config c = Config.load(dir.resolve("kronwerke/launcher.properties"));
         List<Config.ServerConfig> s = Config.servers(dir, c);
         check(s.size() == 1 && s.get(0).name().equals("main") && s.get(0).dir().equals("."), "one server, main, in the root");
-        check(s.get(0).cfg().get("memory").equals("24G") && s.get(0).cfg().get("rcon.port").equals("25575")
+        check(s.get(0).cfg().get("type").equals("neoforge") && s.get(0).cfg().get("memory").equals("24G") && s.get(0).cfg().get("rcon.port").equals("25575")
                 && s.get(0).cfg().get("port").isEmpty(), "memory taken over, ports left alone");
         Files.writeString(dir.resolve("kronwerke/servers/mining.properties"), "dir=servers/mining\nport=27212\norder=20\n");
         Files.writeString(dir.resolve("kronwerke/servers/Bad Name.properties"), "dir=x\n");
         s = Config.servers(dir, c);
         check(s.size() == 2 && s.get(1).name().equals("mining") && s.get(1).cfg().get("memory").equals("8G")
                 && s.get(1).cfg().get("role").equals("mining"), "a second server with defaults, bad names ignored");
+    }
+
+    static void homeFolders() throws IOException {
+        Path a = Files.createTempDirectory("kwl");
+        check(Home.of(a).equals(a.resolve("launcher")) && de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("launcher/jars")), "a new install uses launcher");
+        Files.createDirectories(a.resolve("kronwerke"));
+        Files.writeString(a.resolve("kronwerke/launcher.properties"), "");
+        check(Home.of(a).equals(a.resolve("kronwerke")) && de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("kronwerke/launcher"))
+                && Updater.jars(Home.of(a)).equals(a.resolve("kronwerke/launcher")), "the first install keeps kronwerke");
+        Path b = Files.createTempDirectory("kwl");
+        Config c = Config.load(Home.of(b).resolve("launcher.properties"));
+        List<Config.ServerConfig> s = Config.servers(b, c);
+        check(s.get(0).cfg().get("type").equals("jar") && !s.get(0).cfg().flag("autostart"), "without a pack the first server waits for a jar");
     }
 
     static void cpuSplit() {

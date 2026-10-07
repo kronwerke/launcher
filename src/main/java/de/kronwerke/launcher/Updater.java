@@ -18,24 +18,32 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Installs a new launcher from a release. The jar goes to kronwerke/launcher, named by its
+ * Installs a new launcher from a release. The jar goes to the launcher folder, named by its
  * checksum, and becomes "current"; the jar the panel starts is replaced too, so a fresh
  * container starts the same version. With reload the new version takes over at once and the
  * servers keep running.
  */
 public final class Updater {
-    public static final String PREFIX = "https://github.com/kronwerke/launcher/releases/download/";
+    public static final String REPO = "kronwerke/launcher";
+
+    /** Where releases come from: update.repo (owner/name on GitHub), this project by default. */
+    public static String prefix(Config cfg) {
+        String repo = cfg.get("update.repo").isEmpty() ? REPO : cfg.get("update.repo");
+        if (!repo.matches("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")) throw new IllegalArgumentException("update.repo is owner/name");
+        return "https://github.com/" + repo + "/releases/download/";
+    }
     static final int KEEP = 3;
 
     private Updater() {
     }
 
     public static Object install(Fleet fleet, String from, String sha256, boolean reload) throws Exception {
-        if (!from.startsWith(PREFIX)) throw new IllegalArgumentException("updates only come from " + PREFIX);
+        String prefix = prefix(fleet.config());
+        if (!from.startsWith(prefix)) throw new IllegalArgumentException("updates only come from " + prefix);
         if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("sha256 missing");
         Path own = Boot.ownJar();
         if (own == null) throw new IllegalStateException("not running from a jar");
-        Path dir = fleet.root().resolve("kronwerke/launcher");
+        Path dir = jars(fleet.home());
         Files.createDirectories(dir);
         Path jar = dir.resolve("launcher-" + sha256.substring(0, 12) + ".jar");
         Path tmp = dir.resolve(jar.getFileName() + ".part");
@@ -69,6 +77,11 @@ public final class Updater {
             fleet.reload();
         });
         return "installed, reloading now; the servers keep running";
+    }
+
+    /** Where installed launcher jars live; Boot looks in the same places. */
+    static Path jars(Path home) {
+        return home.resolve(home.getFileName().toString().equals("kronwerke") ? "launcher" : "jars");
     }
 
     static String sha256(Path file) throws Exception {

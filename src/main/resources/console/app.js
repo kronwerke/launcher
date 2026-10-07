@@ -62,6 +62,8 @@ const ICON = {
 const SERVER_COLORS = { main: "var(--gold)", mining: "var(--blue)" };
 const EXTRA = ["var(--violet)", "var(--teal)"];
 function colorOf(name) {
+  const own = (S.overview?.servers || []).find(s => s.name === name)?.color;
+  if (own) return own;
   if (SERVER_COLORS[name]) return SERVER_COLORS[name];
   const names = (S.overview?.servers || []).map(s => s.name).filter(n => !SERVER_COLORS[n]);
   return EXTRA[Math.max(0, names.indexOf(name)) % EXTRA.length];
@@ -75,20 +77,21 @@ const STATE_DE = { running: "läuft", starting: "startet", stopping: "stoppt", s
 const ROLE_DE = { owner: "Inhaber", admin: "Admin", mod: "Moderation", view: "Nur lesen" };
 const SCOPE_DE = { read: "Lesen", players: "Spieler", command: "Befehle", power: "Starten und Stoppen", files: "Dateien", pack: "Pack", config: "Einstellungen" };
 
+const dec = v => (LANG === "de" ? String(v).replace(".", ",") : String(v));
 const fmt = {
   bytes(b) {
     if (b == null || b < 0) return "?";
     const u = ["B", "KB", "MB", "GB", "TB"];
     let i = 0;
     while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-    return (b >= 100 || i === 0 ? Math.round(b) : b.toFixed(1)).toString().replace(".", ",") + " " + u[i];
+    return dec(b >= 100 || i === 0 ? Math.round(b) : b.toFixed(1)) + " " + u[i];
   },
-  num(n, d = 1) { return n == null || n < 0 ? "?" : Number(n).toFixed(d).replace(".", ","); },
-  clock(t) { const d = new Date(t); return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); },
-  date(t) { const d = new Date(t); return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); },
+  num(n, d = 1) { return n == null || n < 0 ? "?" : dec(Number(n).toFixed(d)); },
+  clock(t) { const d = new Date(t); return d.toLocaleTimeString(LANG === "de" ? "de-DE" : "en-GB", { hour: "2-digit", minute: "2-digit" }); },
+  date(t) { const d = new Date(t); return d.toLocaleString(LANG === "de" ? "de-DE" : "en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); },
   since(iso) {
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 60) return "gerade eben";
+    if (s < 60) return T("gerade eben");
     if (s < 3600) return Math.floor(s / 60) + " min";
     if (s < 86400) return Math.floor(s / 3600) + " h " + Math.floor((s % 3600) / 60) + " min";
     return Math.floor(s / 86400) + " d " + Math.floor((s % 86400) / 3600) + " h";
@@ -109,6 +112,292 @@ function storage(key, value) {
   } catch { return null; }
 }
 
+// ---- language ----------------------------------------------------------------------------
+// The interface is written in German; English comes from this table. Missing entries stay German.
+
+let LANG = "en";
+const EN = {
+  "läuft": "running",
+  "startet": "starting",
+  "stoppt": "stopping",
+  "gestoppt": "stopped",
+  "aktualisiert": "updating",
+  "abgestürzt": "crashed",
+  "Inhaber": "Owner",
+  "Moderation": "Moderator",
+  "Nur lesen": "Read only",
+  "Lesen": "Read",
+  "Spieler": "Players",
+  "Befehle": "Commands",
+  "Starten und Stoppen": "Start and stop",
+  "Dateien": "Files",
+  "Einstellungen": "Settings",
+  "gerade eben": "just now",
+  "Der Launcher antwortet nicht.": "The launcher does not answer.",
+  "Die Sitzung ist abgelaufen.": "The session has expired.",
+  " hat nicht geklappt": " did not work",
+  "Weiter": "Continue",
+  "Abbrechen": "Cancel",
+  "Kopiert": "Copied",
+  "Kopieren": "Copy",
+  "Fertig": "Done",
+  "Dieser Browser kann keine Passkeys.": "This browser cannot use passkeys.",
+  "Dieser Browser gibt den Schlüssel nicht heraus. Bitte einen aktuellen Browser nehmen.": "This browser does not hand out the key. Please use a current browser.",
+  "Abgebrochen oder abgelaufen.": "Cancelled or expired.",
+  "Dieser Passkey ist hier schon angelegt.": "This passkey is already registered here.",
+  "Einrichtungscode aus der Server-Konsole oder setup.code im Konsolen-Ordner": "Setup code from the server console, or setup.code in the console folder",
+  "Dein Name": "Your name",
+  "Passkey anlegen": "Create passkey",
+  "Erster Passkey": "First passkey",
+  "Wer diesen Code hat, hat Zugriff auf den Server. Er gilt nur einmal und verschwindet, sobald dein Passkey angelegt ist.": "Whoever has this code has access to the server. It works once and is gone as soon as your passkey exists.",
+  "Passkey anlegen und beitreten": "Create passkey and join",
+  "Einladung": "Invitation",
+  "Du wurdest eingeladen. Ein Passkey ersetzt das Passwort: dein Gerät bestätigt mit Fingerabdruck, Gesicht oder PIN.": "You have been invited. A passkey replaces the password: your device confirms with a fingerprint, your face or a PIN.",
+  "Mit Passkey anmelden": "Sign in with a passkey",
+  "Server, Dateien und Spieler an einem Ort.": "Servers, files and players in one place.",
+  "Noch niemand eingerichtet? ": "Nobody set up yet? ",
+  "Ersten Passkey anlegen": "Create the first passkey",
+  "Übersicht": "Overview",
+  "Konsole": "Console",
+  "Pack und Mods": "Pack and mods",
+  "Ressourcen": "Resources",
+  "Verlauf": "History",
+  "Zugang": "Access",
+  "Bereiche": "Sections",
+  "Suchen und Befehle": "Search and commands",
+  "Millisekunden pro Tick": "Milliseconds per tick",
+  "letzte Stunde": "last hour",
+  "Die Kurve wächst alle zehn Sekunden.": "The curve grows every ten seconds.",
+  "Noch keine Messung.": "No sample yet.",
+  "Starten": "Start",
+  "Neustart": "Restart",
+  "Stoppen": "Stop",
+  "startet neu": "restarts",
+  "Beenden erzwingen": "Force quit",
+  "wird hart beendet": "is killed",
+  " Spieler ist": " player is",
+  " Spieler sind": " players are",
+  " gerade drauf. ": " online right now. ",
+  "Niemand ist drauf. ": "Nobody is online. ",
+  "Ohne Speichern, nur wenn er hängt.": "Without saving, only when it hangs.",
+  "Die Welt wird vorher gespeichert.": "The world is saved first.",
+  "Tickzeit der letzten Stunde": "Tick time of the last hour",
+  "pro Tick": "per tick",
+  " Kerne": " cores",
+  " Spieler": " players",
+  " Kernen": " cores",
+  "Arbeitsspeicher": "Memory",
+  "Festplatte": "Disk",
+  "Zeitleiste": "Timeline",
+  "Alles": "All",
+  "Befehl": "Command",
+  "Stopp": "Stop",
+  "hart beendet": "killed",
+  "Einstellung": "Setting",
+  "Datei geschrieben": "File written",
+  "Datei gelöscht": "File deleted",
+  "Pack-Update": "Pack update",
+  "Launcher neu geladen": "Launcher reloaded",
+  "Launcher-Update": "Launcher update",
+  "Einladung zurückgezogen": "Invitation withdrawn",
+  "neuer Schlüssel": "new key",
+  "Schlüssel widerrufen": "Key revoked",
+  "Person entfernt": "Person removed",
+  "Rolle": "Role",
+  "Passkey entfernt": "Passkey removed",
+  " hat sich angemeldet": " signed in",
+  "Pack-Update: $1 Server stoppen": "Pack update: stopping $1 servers",
+  "Pack $1 auf $2": "Pack $1 to $2",
+  "Console auf Port ": "Console on port ",
+  ", nur über Cloudflare": ", Cloudflare only",
+  "Launcher $1 gestartet (Java $2), Server: $3": "Launcher $1 started (Java $2), servers: $3",
+  "Launcher wird neu geladen, die Server laufen weiter": "Launcher reloading, the servers keep running",
+  "Noch nichts passiert.": "Nothing has happened yet.",
+  "Neue Zeilen": "New lines",
+  "Befehl, ohne Schrägstrich. Pfeiltasten für den Verlauf, Tab ergänzt.": "Command, without a slash. Arrow keys for history, Tab completes.",
+  "Filtern": "Filter",
+  "Zeilen filtern": "Filter lines",
+  "Lade...": "Loading...",
+  "Alle": "All",
+  "Nur Warnungen und Fehler": "Only warnings and errors",
+  "Nur lesen.": "Read only.",
+  "Wer gerade auf welchem Server ist. Die Liste erneuert sich alle zehn Sekunden.": "Who is on which server. The list refreshes every ten seconds.",
+  "Gerade ist niemand online.": "Nobody is online right now.",
+  "Nachricht": "Message",
+  "Kicken": "Kick",
+  "Nachricht an ": "Message to ",
+  "Senden": "Send",
+  "Nachricht gesendet": "Message sent",
+  "Der Grund steht auf seinem Bildschirm.": "The reason appears on their screen.",
+  "Grund": "Reason",
+  "Kurze Wartung, gleich wieder da.": "Short maintenance, back in a moment.",
+  "Was Kronwerke Core über die Season und die Ziele des Obelisken sagt.": "What Kronwerke Core says about the season and the obelisk's goals.",
+  " läuft nicht, die Season ist gerade nicht lesbar.": " is not running, the season cannot be read right now.",
+  "Season pausieren?": "Pause the season?",
+  "Zurück in die Vorbereitung: Abgaben zählen nicht mehr, bis die Season wieder läuft.": "Back to preparation: deposits stop counting until the season runs again.",
+  "Pausieren": "Pause",
+  "Season starten?": "Start the season?",
+  "Ab jetzt zählen Abgaben und Fortschritt.": "From now on deposits and progress count.",
+  "Season starten": "Start season",
+  "in Vorbereitung": "in preparation",
+  "Nummer": "Number",
+  "Stufe ": "Tier ",
+  "Gestartet": "Started",
+  "Zuletzt: ": "Latest: ",
+  "Ja": "Yes",
+  "Was auf dem Server läuft und was im Repository wartet.": "What runs on the server and what waits in the repository.",
+  "Pack auf ": "Bring the pack to ",
+  "den neuesten Stand": "the latest version",
+  "Alle Server stoppen, packwiz holt Mods und Configs, dann starten sie wieder. ": "Every server stops, packwiz fetches mods and configs, then they start again. ",
+  " Spieler fliegen dabei raus.": " players will be disconnected.",
+  "Aktualisieren": "Update",
+  "Pack-Update läuft": "Pack update running",
+  " Mods durchsuchen": " mods, search",
+  "Mods durchsuchen": "Search mods",
+  "Auf dem Server": "On the server",
+  "Im Repository": "In the repository",
+  "nicht erreichbar": "not reachable",
+  "Update läuft": "Update running",
+  " Version": " version",
+  " Versionen": " versions",
+  "Aktuell": "Up to date",
+  "Neu prüfen": "Check again",
+  "Pack aktualisieren": "Update pack",
+  "Was dazukommt": "What comes with it",
+  "Pfad": "Path",
+  "Configs, KubeJS und Mods dürfen geändert werden, die Welt nur gelesen. Schlüssel bleiben unsichtbar.": "Configs, KubeJS and mods can be changed, the world only read. Keys stay invisible.",
+  "Hochladen": "Upload",
+  "Der Ordner ist leer.": "The folder is empty.",
+  " löschen?": ": delete?",
+  "Das lässt sich nicht rückgängig machen.": "This cannot be undone.",
+  "Löschen": "Delete",
+  " gelöscht": " deleted",
+  ", nur lesen": ", read only",
+  "Herunterladen": "Download",
+  "Speichern": "Save",
+  "Binärdatei, nur zum Herunterladen.": "Binary file, download only.",
+  "CPU-Anteile wirken sofort, Arbeitsspeicher ab dem nächsten Start des Servers.": "CPU shares apply at once, memory from the server's next start.",
+  "Gespeichert": "Saved",
+  " Kerne erlaubt, ": " cores allowed, ",
+  "Welcher Server welche CPU nutzt": "Which server uses which CPU",
+  "Server auf ihre Anteile begrenzen": "Limit servers to their shares",
+  "Automatisch umverteilen, wenn einer hängt": "Rebalance when one struggles",
+  "CPU-Anteil ": "CPU share ",
+  " bekommt Anteil ": " gets share ",
+  " GB Heap vergeben, ": " GB heap given, ",
+  " GB im Container, pro Server 3 GB Puffer": " GB in the container, 3 GB headroom per server",
+  "Belegt": "Used",
+  "Nach Absturz neu": "Restart after crash",
+  "Langsamste Dimensionen": "Slowest dimensions",
+  "Aus neoforge tps, alle zehn Sekunden": "From neoforge tps, every ten seconds",
+  "Wer hat was getan": "Who did what",
+  "Abstürze": "Crashes",
+  "Wann": "When",
+  "Wer": "Who",
+  "Was": "What",
+  "Von": "From",
+  "Schlüssel": "Key",
+  "Noch keine Einträge.": "No entries yet.",
+  "Keine Absturzberichte. So soll es sein.": "No crash reports. As it should be.",
+  "Passkeys statt Passwörtern. Schlüssel für Programme.": "Passkeys instead of passwords. Keys for programs.",
+  "Abgemeldet.": "Signed out.",
+  "Abmelden": "Sign out",
+  "Passkey hinzugefügt": "Passkey added",
+  "Passkey nicht angelegt": "Passkey not created",
+  "Angemeldet als ": "Signed in as ",
+  ", Rolle ": ", role ",
+  "Weiteren Passkey anlegen": "Add another passkey",
+  "Name, optional": "Name, optional",
+  "Jemanden einladen": "Invite someone",
+  "Der Link gilt 24 Stunden und nur einmal. Wer ihn öffnet, legt seinen Passkey an.": "The link is valid for 24 hours and once. Whoever opens it creates their passkey.",
+  "Link erstellen": "Create link",
+  "Einladung erstellt": "Invitation created",
+  "Einladungslink": "Invitation link",
+  "Schick ihn direkt an die Person. Er zeigt sich nur jetzt.": "Send it straight to the person. It is shown only now.",
+  "Läuft nicht ab": "Never expires",
+  "30 Tage": "30 days",
+  "90 Tage": "90 days",
+  "Ein Jahr": "One year",
+  "Neuer API-Schlüssel": "New API key",
+  "Für Programme, die die Console ohne Passkey nutzen. Der Schlüssel zeigt sich einmal, danach nur noch sein Anfang.": "For programs that use the console without a passkey. The key is shown once, afterwards only its beginning.",
+  "Gültig": "Valid",
+  "Darf": "May",
+  "Erstellen": "Create",
+  "Schlüssel erstellt": "Key created",
+  "Dein API-Schlüssel": "Your API key",
+  "Als Bearer-Token senden. Er erscheint nie wieder; wer ihn verliert, erstellt einen neuen.": "Send it as a bearer token. It never appears again; whoever loses it makes a new one.",
+  "Personen": "People",
+  "Passkey für mich": "Passkey for me",
+  "Einladen": "Invite",
+  "Rolle von ": "Role of ",
+  "Rolle geändert": "Role changed",
+  " Sitzung": " session",
+  " Sitzungen": " sessions",
+  "Entfernen": "Remove",
+  "Entfernt": "Removed",
+  "Alle Passkeys und Sitzungen der Person enden sofort.": "All passkeys and sessions of this person end at once.",
+  "Offene Einladungen": "Open invitations",
+  "ohne Name": "no name",
+  "Zurückziehen": "Withdraw",
+  "API-Schlüssel": "API keys",
+  "Neuer Schlüssel": "New key",
+  "nie benutzt": "never used",
+  "Programme mit diesem Schlüssel kommen ab sofort nicht mehr rein.": "Programs with this key are locked out at once.",
+  "Widerrufen": "Revoke",
+  "Noch keine Schlüssel.": "No keys yet.",
+  "Seite": "Page",
+  "Konsole ": "Console ",
+  "Dateien ": "Files ",
+  "Aktion": "Action",
+  " neu starten": ": restart",
+  " hart beenden": ": kill",
+  "Kicken: ": "Kick: ",
+  "g dann ": "g then ",
+  "Launcher neu laden": "Reload launcher",
+  "Launcher neu laden?": "Reload the launcher?",
+  "Die Server laufen weiter, nur der Launcher startet frisch. Die Seite verbindet sich danach neu.": "The servers keep running, only the launcher starts fresh. The page reconnects afterwards.",
+  "Neu laden": "Reload",
+  "Launcher lädt neu": "Launcher reloading",
+  "Konto": "Account",
+  "Wohin, oder was tun?": "Where to, or what to do?",
+  "Suchen": "Search",
+  "Keine Verbindung": "No connection",
+  "Nochmal versuchen": "Try again",
+  "Übersicht nicht geladen": "Overview not loaded",
+  "Server": "Server",
+  " starten": ": start",
+  " stoppen": ": stop",
+  " seit ": " for ",
+  "bis ": "until ",
+  "zuletzt ": "last ",
+  ": Heap ": ": heap ",
+  "Heap ": "Heap ",
+  "fehlgeschlagen": "failed",
+  "unbekannt": "unknown",
+  " auf ": " on ",
+  "Text": "Text",
+  "Name": "Name",
+  "Gerät": "Device",
+  "Sitzungen": "sessions",
+  "Kein": "No",
+  " hochgeladen": " uploaded",
+  " gespeichert": " saved",
+  " gekickt": " kicked",
+  " kicken?": ": kick?",
+  "(du)": "(you)",
+  " (du)": " (you)",
+  "Abgemeldet": "Signed out",
+  "Die Kurve": "The curve",
+  "gesperrt": "locked",
+  "Season": "Season",
+  "schlummert": "slumbering",
+  ", schlummert": ", slumbering"
+  };
+function T(s) {
+  if (s == null) return s;
+  return LANG === "de" ? s : (EN[s] ?? s);
+}
+
 // ---- state and API -----------------------------------------------------------------------
 
 const S = { session: null, overview: null, logs: {}, all: [], stream: null, metrics: {}, page: null, keys: "" };
@@ -121,13 +410,13 @@ async function api(method, path, body) {
   try {
     res = await fetch("/api" + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: "same-origin" });
   } catch {
-    throw new Error("Der Launcher antwortet nicht.");
+    throw new Error(T("Der Launcher antwortet nicht."));
   }
   let j;
   try { j = await res.json(); } catch { j = { ok: false, error: "HTTP " + res.status }; }
   if (res.status === 401 && S.session?.user && !path.startsWith("/auth")) {
     S.session.user = null;
-    door("login", "Die Sitzung ist abgelaufen.");
+    door("login", T("Die Sitzung ist abgelaufen."));
   }
   if (!j.ok) throw new Error(j.error || "HTTP " + res.status);
   return j.data;
@@ -147,12 +436,12 @@ async function run(title, fn) {
     toast(title, typeof r === "string" ? r : "");
     return r;
   } catch (e) {
-    toast(title + " hat nicht geklappt", e.message, true);
+    toast(title + T(" hat nicht geklappt"), e.message, true);
     throw e;
   }
 }
 
-function confirmDialog({ title, text, ok = "Weiter", danger, input }) {
+function confirmDialog({ title, text, ok = T("Weiter"), danger, input }) {
   return new Promise(resolve => {
     const field = input ? h("input", { type: "text", placeholder: input.placeholder || "", value: input.value || "", required: input.required || null }) : null;
     const d = h("dialog", null,
@@ -161,7 +450,7 @@ function confirmDialog({ title, text, ok = "Weiter", danger, input }) {
         text ? h("p", null, text) : null,
         input ? h("label", { class: "field" }, h("span", null, input.label), field) : null,
         h("div", { class: "actions" },
-          h("button", { class: "btn quiet", value: "cancel", type: "submit", formnovalidate: true }, "Abbrechen"),
+          h("button", { class: "btn quiet", value: "cancel", type: "submit", formnovalidate: true }, T("Abbrechen")),
           h("button", { class: "btn " + (danger ? "danger" : "primary"), value: "ok", type: "submit" }, ok))));
     document.body.append(d);
     d.addEventListener("close", () => {
@@ -180,8 +469,8 @@ function infoDialog(title, text, secret) {
       text ? h("p", null, text) : null,
       secret ? h("div", { class: "secret" }, secret) : null,
       h("div", { class: "actions" },
-        secret ? h("button", { class: "btn", type: "button", onclick: () => { navigator.clipboard?.writeText(secret); toast("Kopiert"); } }, "Kopieren") : null,
-        h("button", { class: "btn primary", value: "ok" }, "Fertig"))));
+        secret ? h("button", { class: "btn", type: "button", onclick: () => { navigator.clipboard?.writeText(secret); toast(T("Kopiert")); } }, T("Kopieren")) : null,
+        h("button", { class: "btn primary", value: "ok" }, T("Fertig")))));
   document.body.append(d);
   d.addEventListener("close", () => d.remove());
   d.showModal();
@@ -203,14 +492,14 @@ const b64u = {
 };
 
 async function createPasskey(o) {
-  if (!window.PublicKeyCredential) throw new Error("Dieser Browser kann keine Passkeys.");
+  if (!window.PublicKeyCredential) throw new Error(T("Dieser Browser kann keine Passkeys."));
   const opts = structuredClone(o);
   opts.challenge = b64u.dec(opts.challenge);
   opts.user.id = b64u.dec(opts.user.id);
   opts.excludeCredentials = (opts.excludeCredentials || []).map(c => ({ ...c, id: b64u.dec(c.id) }));
   const cred = await navigator.credentials.create({ publicKey: opts });
   const r = cred.response;
-  if (!r.getPublicKey || !r.getPublicKey()) throw new Error("Dieser Browser gibt den Schlüssel nicht heraus. Bitte einen aktuellen Browser nehmen.");
+  if (!r.getPublicKey || !r.getPublicKey()) throw new Error(T("Dieser Browser gibt den Schlüssel nicht heraus. Bitte einen aktuellen Browser nehmen."));
   return {
     id: b64u.enc(cred.rawId),
     publicKey: b64u.enc(r.getPublicKey()),
@@ -221,7 +510,7 @@ async function createPasskey(o) {
 }
 
 async function getPasskey(o) {
-  if (!window.PublicKeyCredential) throw new Error("Dieser Browser kann keine Passkeys.");
+  if (!window.PublicKeyCredential) throw new Error(T("Dieser Browser kann keine Passkeys."));
   const opts = structuredClone(o);
   opts.challenge = b64u.dec(opts.challenge);
   const cred = await navigator.credentials.get({ publicKey: opts });
@@ -236,14 +525,14 @@ async function getPasskey(o) {
 }
 
 function passkeyError(e) {
-  if (e?.name === "NotAllowedError") return "Abgebrochen oder abgelaufen.";
-  if (e?.name === "InvalidStateError") return "Dieser Passkey ist hier schon angelegt.";
+  if (e?.name === "NotAllowedError") return T("Abgebrochen oder abgelaufen.");
+  if (e?.name === "InvalidStateError") return T("Dieser Passkey ist hier schon angelegt.");
   return e?.message || String(e);
 }
 
 function deviceLabel() {
   const ua = navigator.userAgent;
-  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Gerät";
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : T("Gerät");
   const br = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
   return os + ", " + br;
 }
@@ -256,7 +545,7 @@ function crownMark() {
 
 function door(kind, message) {
   stopStream();
-  document.title = "Kronwerke Console";
+  document.title = S.session?.title || "Console";
   const app = $("#app");
   app.className = "";
   app.removeAttribute("aria-busy");
@@ -265,7 +554,7 @@ function door(kind, message) {
   let card;
   if (kind === "setup") {
     const code = h("input", { type: "text", autocomplete: "one-time-code", placeholder: "KW-XXXX-XXXX", required: true, spellcheck: "false" });
-    const name = h("input", { type: "text", autocomplete: "nickname", placeholder: "Samuel", required: true, maxlength: 40 });
+    const name = h("input", { type: "text", autocomplete: "nickname", placeholder: T("Name"), required: true, maxlength: 40 });
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
       err.textContent = "";
@@ -277,10 +566,10 @@ function door(kind, message) {
         start();
       } catch (x) { err.textContent = passkeyError(x); }
     } },
-      h("label", { class: "field" }, h("span", null, "Einrichtungscode aus der Tavuru-Konsole"), code),
-      h("label", { class: "field" }, h("span", null, "Dein Name"), name),
-      h("button", { class: "btn primary", type: "submit" }, "Passkey anlegen"), err);
-    card = [h("h1", null, "Erster Passkey"), h("p", null, "Wer diesen Code hat, hat Zugriff auf den Server. Er gilt nur einmal und verschwindet, sobald dein Passkey angelegt ist."), form];
+      h("label", { class: "field" }, h("span", null, T("Einrichtungscode aus der Server-Konsole oder setup.code im Konsolen-Ordner")), code),
+      h("label", { class: "field" }, h("span", null, T("Dein Name")), name),
+      h("button", { class: "btn primary", type: "submit" }, T("Passkey anlegen")), err);
+    card = [h("h1", null, T("Erster Passkey")), h("p", null, T("Wer diesen Code hat, hat Zugriff auf den Server. Er gilt nur einmal und verschwindet, sobald dein Passkey angelegt ist.")), form];
   } else if (kind === "invite") {
     const token = location.hash.slice(1);
     const name = h("input", { type: "text", autocomplete: "nickname", required: true, maxlength: 40 });
@@ -295,9 +584,9 @@ function door(kind, message) {
         start();
       } catch (x) { err.textContent = passkeyError(x); }
     } },
-      h("label", { class: "field" }, h("span", null, "Dein Name"), name),
-      h("button", { class: "btn primary", type: "submit" }, "Passkey anlegen und beitreten"), err);
-    card = [h("h1", null, "Einladung"), h("p", null, "Du wurdest in die Kronwerke Console eingeladen. Ein Passkey ersetzt das Passwort: dein Gerät bestätigt mit Fingerabdruck, Gesicht oder PIN."), form];
+      h("label", { class: "field" }, h("span", null, T("Dein Name")), name),
+      h("button", { class: "btn primary", type: "submit" }, T("Passkey anlegen und beitreten")), err);
+    card = [h("h1", null, T("Einladung")), h("p", null, T("Du wurdest eingeladen. Ein Passkey ersetzt das Passwort: dein Gerät bestätigt mit Fingerabdruck, Gesicht oder PIN.")), form];
   } else {
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
@@ -309,9 +598,9 @@ function door(kind, message) {
         start();
       } catch (x) { err.textContent = passkeyError(x); }
     } },
-      h("button", { class: "btn primary", type: "submit", autofocus: true }, svg(ICON.key), "Mit Passkey anmelden"), err);
-    card = [h("h1", null, "Kronwerke Console"), h("p", null, "Server, Pack und Spieler an einem Ort."), form, note,
-      S.session?.setup ? h("p", { class: "note" }, "Noch niemand eingerichtet? ", h("a", { href: "/setup" }, "Ersten Passkey anlegen")) : null];
+      h("button", { class: "btn primary", type: "submit", autofocus: true }, svg(ICON.key), T("Mit Passkey anmelden")), err);
+    card = [h("h1", null, S.session?.title || "Console"), h("p", null, T("Server, Dateien und Spieler an einem Ort.")), form, note,
+      S.session?.setup ? h("p", { class: "note" }, T("Noch niemand eingerichtet? "), h("a", { href: "/setup" }, T("Ersten Passkey anlegen"))) : null];
   }
   put(app, h("div", { class: "door" }, h("div", { class: "door-card" }, crownMark(), card)));
   $("input, button", app)?.focus();
@@ -323,7 +612,7 @@ const PAGES = [
   { path: "/", name: "Übersicht", key: "o", draw: pageOverview },
   { path: "/konsole", name: "Konsole", key: "k", draw: pageConsole },
   { path: "/spieler", name: "Spieler", key: "s", draw: pagePlayers },
-  { path: "/season", name: "Season", key: "e", draw: pageSeason },
+  { path: "/season", name: "Season", key: "e", draw: pageSeason, feature: "season" },
   { path: "/pack", name: "Pack und Mods", key: "p", draw: pagePack },
   { path: "/dateien", name: "Dateien", key: "d", draw: pageFiles, scope: "files" },
   { path: "/ressourcen", name: "Ressourcen", key: "r", draw: pageResources },
@@ -340,15 +629,15 @@ function shell() {
   const app = $("#app");
   app.className = "";
   app.removeAttribute("aria-busy");
-  const nav = h("nav", { class: "pages", "aria-label": "Bereiche" },
-    PAGES.filter(p => !p.scope || can(p.scope)).map(p => h("a", { href: p.path, "data-link": true }, p.name, h("kbd", { title: "g dann " + p.key }, "g " + p.key))));
+  const nav = h("nav", { class: "pages", "aria-label": T("Bereiche") },
+    PAGES.filter(p => (!p.scope || can(p.scope)) && (!p.feature || S.session[p.feature])).map(p => h("a", { href: p.path, "data-link": true }, T(p.name), h("kbd", { title: T("g dann ") + p.key }, "g " + p.key))));
   const rail = h("aside", { class: "rail" },
-    h("a", { class: "mark", href: "/", "data-link": true }, crownMark(), h("b", null, "Kronwerke ", h("span", null, "Console"))),
+    h("a", { class: "mark", href: "/", "data-link": true }, crownMark(), h("b", null, S.session.title.replace(/ Console$/, "") + " ", h("span", null, "Console"))),
     h("div", { class: "fleet", id: "fleet" }),
     nav,
     h("div", { class: "rail-foot" },
-      h("button", { class: "palette-hint", onclick: openPalette }, "Suchen und Befehle", h("kbd", null, navigator.platform.includes("Mac") ? "Cmd K" : "Strg K")),
-      h("span", { id: "who" }, S.session.user.name + ", " + (ROLE_DE[S.session.user.role] || S.session.user.role)),
+      h("button", { class: "palette-hint", onclick: openPalette }, T("Suchen und Befehle"), h("kbd", null, navigator.platform.includes("Mac") ? "Cmd K" : "Strg K")),
+      h("span", { id: "who" }, S.session.user.name + ", " + (T(ROLE_DE[S.session.user.role]) || S.session.user.role)),
       h("span", { id: "ver", class: "dim" }, "Launcher " + (S.session.launcher || ""))));
   const main = h("main", { id: "main", tabindex: "-1" });
   put(app, h("div", { class: "shell" }, rail, main));
@@ -361,8 +650,8 @@ function drawFleet() {
   put(el, ...S.overview.servers.map(s => {
     const m = s.last?.mspt;
     return h("a", { class: "srv", href: "/konsole/" + s.name, "data-link": true, "data-state": s.state, "data-health": s.state === "running" ? health(m) : "", style: { "--c": colorOf(s.name) } },
-      h("i"), h("span", null, h("b", null, s.name), h("small", null, STATE_DE[s.state] || s.state)),
-      h("em", { title: "Millisekunden pro Tick" }, s.state === "running" && m >= 0 ? fmt.num(m) + " ms" : ""));
+      h("i"), h("span", null, h("b", null, s.name), h("small", null, T(STATE_DE[s.state]) || s.state)),
+      h("em", { title: T("Millisekunden pro Tick") }, s.state === "running" && m >= 0 ? fmt.num(m) + " ms" : ""));
   }));
 }
 
@@ -381,7 +670,7 @@ function route() {
   $$("nav.pages a").forEach(a => a.toggleAttribute("aria-current", false));
   const link = $$("nav.pages a").find(a => a.getAttribute("href") === page.path);
   if (link) link.setAttribute("aria-current", "page");
-  document.title = page.name + ", Kronwerke Console";
+  document.title = T(page.name) + ", " + S.session.title;
   const main = $("#main");
   put(main);
   page.draw(main, location.pathname.slice(page.path.length).replace(/^\//, ""));
@@ -437,7 +726,7 @@ function startStream() {
     setTimeout(async () => {
       if (es.readyState === EventSource.CLOSED) {
         try { S.session = await api("GET", "/session"); } catch {}
-        if (S.session?.user) startStream(); else door("login", "Die Sitzung ist abgelaufen.");
+        if (S.session?.user) startStream(); else door("login", T("Die Sitzung ist abgelaufen."));
       }
     }, 3000);
   };
@@ -505,7 +794,7 @@ function drawTrace(canvas, samples, color) {
   g.fillText(label, w - g.measureText(label).width - 8, hgt - 8);
   if (pts.length < 2) {
     g.fillStyle = "rgba(170, 163, 155, 0.7)";
-    g.fillText(pts.length ? "Die Kurve wächst alle zehn Sekunden." : "Noch keine Messung.", 6, hgt - 12);
+    g.fillText(pts.length ? T("Die Kurve wächst alle zehn Sekunden.") : T("Noch keine Messung."), 6, hgt - 12);
     return;
   }
   const path = new Path2D();
@@ -553,10 +842,10 @@ function powerButtons(s, small) {
   const cls = "btn" + (small ? " small" : "");
   const out = [];
   if (s.state === "stopped" || s.state === "crashed") {
-    out.push(h("button", { class: cls, onclick: () => power(s.name, "start") }, svg(ICON.play), "Starten"));
+    out.push(h("button", { class: cls, onclick: () => power(s.name, "start") }, svg(ICON.play), T("Starten")));
   } else {
-    out.push(h("button", { class: cls, onclick: () => power(s.name, "restart") }, svg(ICON.restart), "Neustart"));
-    out.push(h("button", { class: cls + " quiet", onclick: () => power(s.name, "stop") }, svg(ICON.stop), "Stoppen"));
+    out.push(h("button", { class: cls, onclick: () => power(s.name, "restart") }, svg(ICON.restart), T("Neustart")));
+    out.push(h("button", { class: cls + " quiet", onclick: () => power(s.name, "stop") }, svg(ICON.stop), T("Stoppen")));
   }
   return out;
 }
@@ -564,11 +853,11 @@ function powerButtons(s, small) {
 async function power(name, action) {
   const s = S.overview.servers.find(x => x.name === name);
   const n = s?.players?.length || 0;
-  const words = { start: ["Starten", "startet"], restart: ["Neustart", "startet neu"], stop: ["Stoppen", "stoppt"], kill: ["Beenden erzwingen", "wird hart beendet"] };
+  const words = { start: [T("Starten"), T("startet")], restart: [T("Neustart"), T("startet neu")], stop: [T("Stoppen"), T("stoppt")], kill: [T("Beenden erzwingen"), T("wird hart beendet")] };
   if (action !== "start") {
     const ok = await confirmDialog({
       title: words[action][0] + ": " + name + "?",
-      text: (n ? n + (n === 1 ? " Spieler ist" : " Spieler sind") + " gerade drauf. " : "Niemand ist drauf. ") + (action === "kill" ? "Ohne Speichern, nur wenn er hängt." : "Die Welt wird vorher gespeichert."),
+      text: (n ? n + (n === 1 ? T(" Spieler ist") : T(" Spieler sind")) + T(" gerade drauf. ") : T("Niemand ist drauf. ")) + (action === "kill" ? T("Ohne Speichern, nur wenn er hängt.") : T("Die Welt wird vorher gespeichert.")),
       ok: words[action][0], danger: action !== "restart",
     });
     if (!ok) return;
@@ -581,29 +870,29 @@ function pageOverview(main) {
   const o = S.overview;
   const cards = h("div", { class: "stack", id: "pulses" });
   const side = h("div", { class: "stack" });
-  main.append(header("Übersicht", null,
+  main.append(header(T("Übersicht"), null,
     can("pack") ? h("a", { class: "btn", href: "/pack", "data-link": true }, "Pack " + (o.pack.version || "?")) : null),
     h("div", { class: "grid-2" }, cards, side));
 
   const drawCards = () => {
     put(cards, ...S.overview.servers.map(s => {
       const m = s.last?.mspt ?? -1;
-      const canvas = h("canvas", { class: "trace", "aria-label": "Tickzeit der letzten Stunde" });
+      const canvas = h("canvas", { class: "trace", "aria-label": T("Tickzeit der letzten Stunde") });
       const card = h("section", { class: "panel pulse", style: { "--c": colorOf(s.name) }, "data-server": s.name },
         h("div", { class: "pulse-top" },
           h("div", null,
             h("div", { class: "pulse-name" },
               h("h2", null, h("a", { href: "/konsole/" + s.name, "data-link": true }, s.name)),
-              h("span", { class: "state", "data-s": s.state }, (STATE_DE[s.state] || s.state) + " seit " + fmt.since(s.since))),
+              h("span", { class: "state", "data-s": s.state }, (T(STATE_DE[s.state]) || s.state) + T(" seit ") + fmt.since(s.since))),
             h("div", { class: "pulse-meta" }, [s.detail, s.port ? "Port " + s.port : null, s.role && s.role !== s.name ? s.role : null].filter(Boolean).join(", "))),
           h("div", { class: "mspt", "data-health": s.state === "running" ? health(m) : "" },
             h("b", null, s.state === "running" && m >= 0 ? fmt.num(m) : "?", h("small", null, "ms")),
-            h("span", null, s.state === "running" && s.last?.tps >= 0 ? fmt.num(s.last.tps) + " TPS" : "pro Tick"))),
+            h("span", null, s.state === "running" && s.last?.tps >= 0 ? fmt.num(s.last.tps) + " TPS" : T("pro Tick")))),
         canvas,
         h("div", { class: "pulse-foot" },
           h("span", null, "CPU ", h("b", null, s.last?.cpu >= 0 ? fmt.num(s.last.cpu / 100) + " Kerne" : "?"), " ", spark(S.metrics[s.name] || [], "cpu", resolveColor(colorOf(s.name)))),
           h("span", null, "RAM ", h("b", null, fmt.bytes(s.last?.rss)), " von ", s.memory || "?"),
-          h("span", null, h("b", null, s.players.length), s.players.length === 1 ? " Spieler" : " Spieler"),
+          h("span", null, h("b", null, s.players.length), s.players.length === 1 ? " Spieler" : T(" Spieler")),
           s.players.length ? heads(s.players) : null,
           h("span", { class: "actions nowrap end" }, powerButtons(s, true))));
       metricsOf(s.name).then(ms => drawTrace(canvas, ms, colorOf(s.name))).catch(() => {});
@@ -624,11 +913,11 @@ function pageOverview(main) {
       h("section", { class: "panel" },
         h("header", null, h("h2", null, "Container"), h("p", null, "Launcher " + S.overview.launcher.version)),
         h("div", { class: "body bars" },
-          bar("CPU", (cpu >= 0 ? fmt.num(cpu) : "?") + " von " + fmt.num(c.cpuLimit, 0) + " Kernen", cpuPct),
-          bar("Arbeitsspeicher", fmt.bytes(c.memory) + " von " + fmt.bytes(c.memoryMax), memPct),
-          bar("Festplatte", fmt.bytes(c.disk) + " von " + fmt.bytes(c.diskMax), diskPct))),
+          bar("CPU", (cpu >= 0 ? fmt.num(cpu) : "?") + " von " + fmt.num(c.cpuLimit, 0) + T(" Kernen"), cpuPct),
+          bar(T("Arbeitsspeicher"), fmt.bytes(c.memory) + " von " + fmt.bytes(c.memoryMax), memPct),
+          bar(T("Festplatte"), fmt.bytes(c.disk) + " von " + fmt.bytes(c.diskMax), diskPct))),
       h("section", { class: "panel" },
-        h("header", null, h("h2", null, "Zeitleiste"), h("a", { class: "btn small quiet", href: "/verlauf", "data-link": true }, "Alles")),
+        h("header", null, h("h2", null, T("Zeitleiste")), h("a", { class: "btn small quiet", href: "/verlauf", "data-link": true }, T("Alles"))),
         timeline(S.overview.events.slice(-40).reverse(), "tl")));
   };
 
@@ -647,30 +936,30 @@ function eventText(e) {
   let t = e.text || "";
   if (e.kind === "state") {
     const [word, ...rest] = t.split(": ");
-    t = (STATE_DE[word] || word) + (rest.length ? ": " + rest.join(": ") : "");
+    t = (T(STATE_DE[word]) || word) + (rest.length ? ": " + rest.join(": ") : "");
   }
   if (e.kind === "action") {
-    const words = { "command": "Befehl", "start": "Start", "stop": "Stopp", "restart": "Neustart", "kill": "hart beendet",
-      "config": "Einstellung", "write": "Datei geschrieben", "delete": "Datei gelöscht", "pack update": "Pack-Update",
-      "launcher reload": "Launcher neu geladen", "launcher update": "Launcher-Update", "invite": "Einladung",
-      "drop invite": "Einladung zurückgezogen", "new key": "neuer Schlüssel", "drop key": "Schlüssel widerrufen",
-      "remove person": "Person entfernt", "role": "Rolle", "drop passkey": "Passkey entfernt" };
+    const words = { "command": T("Befehl"), "start": "Start", "stop": T("Stopp"), "restart": T("Neustart"), "kill": T("hart beendet"),
+      "config": T("Einstellung"), "write": T("Datei geschrieben"), "delete": T("Datei gelöscht"), "pack update": T("Pack-Update"),
+      "launcher reload": T("Launcher neu geladen"), "launcher update": T("Launcher-Update"), "invite": T("Einladung"),
+      "drop invite": T("Einladung zurückgezogen"), "new key": T("neuer Schlüssel"), "drop key": T("Schlüssel widerrufen"),
+      "remove person": T("Person entfernt"), "role": T("Rolle"), "drop passkey": T("Passkey entfernt") };
     const m = /^(.*?): (.*)$/.exec(t);
     if (m) {
       const key = Object.keys(words).sort((a, b) => b.length - a.length).find(k => m[2] === k || m[2].startsWith(k + " "));
       if (key) t = m[1] + ": " + words[key] + m[2].slice(key.length);
     }
   }
-  return t.replace(/ signed in$/, " hat sich angemeldet")
-    .replace(/^pack update: stopping (\d+) servers$/, "Pack-Update: $1 Server stoppen")
-    .replace(/^pack (\S+) to (\S+)$/, "Pack $1 auf $2")
-    .replace(/^console on port (\d+)(, Cloudflare only)?$/, (m, p, cf) => "Console auf Port " + p + (cf ? ", nur über Cloudflare" : ""))
-    .replace(/^Kronwerke launcher (\S+), java (\S+), servers (.+)$/, "Launcher $1 gestartet (Java $2), Server: $3")
-    .replace(/^Handing the servers to the next launcher$/, "Launcher wird neu geladen, die Server laufen weiter");
+  return t.replace(/ signed in$/, T(" hat sich angemeldet"))
+    .replace(/^pack update: stopping (\d+) servers$/, T("Pack-Update: $1 Server stoppen"))
+    .replace(/^pack (\S+) to (\S+)$/, T("Pack $1 auf $2"))
+    .replace(/^console on port (\d+)(, Cloudflare only)?$/, (m, p, cf) => T("Console auf Port ") + p + (cf ? T(", nur über Cloudflare") : ""))
+    .replace(/^Launcher (\S+), java (\S+), servers (.+)$/, T("Launcher $1 gestartet (Java $2), Server: $3"))
+    .replace(/^Handing the servers to the next launcher$/, T("Launcher wird neu geladen, die Server laufen weiter"));
 }
 
 function timeline(events, id) {
-  if (!events.length) return h("p", { class: "empty" }, "Noch nichts passiert.");
+  if (!events.length) return h("p", { class: "empty" }, T("Noch nichts passiert."));
   return h("ul", { class: "timeline", id }, events.map(e => h("li", { "data-kind": e.kind, "data-bad": /crash|fail|abgest/i.test(e.text) || null },
     h("time", { datetime: e.t }, fmt.clock(e.t)),
     h("span", null, e.server ? h("span", { class: "who", style: { "--c": colorOf(e.server) } }, e.server) : null, h("span", { class: "what" }, eventText(e))))));
@@ -680,8 +969,9 @@ function timeline(events, id) {
 
 const COMMANDS = ["list", "say ", "msg ", "kick ", "tp ", "gamemode spectator ", "gamemode survival ", "time set day", "weather clear",
   "neoforge tps", "neoforge entity list", "spark tps", "spark health", "spark profiler start", "spark profiler stop", "save-all",
-  "whitelist list", "op ", "deop ", "kw admin list", "kw admin season json", "kw admin goals json", "kw admin obelisk info",
-  "kw admin season start", "kw admin season pause", "kw admin active", "kw admin goal reload", "forceload query", "chunky progress"];
+  "whitelist list", "op ", "deop ", "forceload query", "chunky progress"];
+const CORE_COMMANDS = ["kw admin list", "kw admin season json", "kw admin goals json", "kw admin obelisk info",
+  "kw admin season start", "kw admin season pause", "kw admin active", "kw admin goal reload"];
 
 function lineClass(t) {
   if (t.startsWith("[Kronwerke]")) return "kw";
@@ -695,11 +985,11 @@ function pageConsole(main, rest) {
   let which = rest && (servers.includes(rest) || rest === "alle") ? rest : servers[0];
   let filter = "", onlyErrors = false, stick = true;
   const log = h("div", { class: "log", role: "log", "aria-live": "off", tabindex: "0" });
-  const newer = h("button", { class: "btn small newer", hidden: true, onclick: () => { log.scrollTop = log.scrollHeight; } }, "Neue Zeilen");
-  const input = h("input", { type: "text", placeholder: "Befehl, ohne Schrägstrich. Pfeiltasten für den Verlauf, Tab ergänzt.", autocomplete: "off", spellcheck: "false", "aria-label": "Befehl" });
+  const newer = h("button", { class: "btn small newer", hidden: true, onclick: () => { log.scrollTop = log.scrollHeight; } }, T("Neue Zeilen"));
+  const input = h("input", { type: "text", placeholder: T("Befehl, ohne Schrägstrich. Pfeiltasten für den Verlauf, Tab ergänzt."), autocomplete: "off", spellcheck: "false", "aria-label": T("Befehl") });
   const suggest = h("ul", { class: "suggest", hidden: true, role: "listbox" });
   const seg = h("div", { class: "seg", role: "group", "aria-label": "Server" });
-  const search = h("input", { type: "search", placeholder: "Filtern", "aria-label": "Zeilen filtern" });
+  const search = h("input", { type: "search", placeholder: T("Filtern"), "aria-label": T("Zeilen filtern") });
   const errBox = h("input", { type: "checkbox", class: "switch" });
 
   const row = (text, server, cls) => {
@@ -712,7 +1002,7 @@ function pageConsole(main, rest) {
   const visible = t => (!onlyErrors || /error|warn/.test(lineClass(t))) && (!filter || t.toLowerCase().includes(filter));
 
   const fill = async () => {
-    put(log, h("div", { class: "dim" }, "Lade..."));
+    put(log, h("div", { class: "dim" }, T("Lade...")));
     let rows = [];
     if (which === "alle") {
       for (const n of servers) {
@@ -733,7 +1023,7 @@ function pageConsole(main, rest) {
   const drawSeg = () => put(seg, ...[...servers, "alle"].map(n => h("button", {
     type: "button", "aria-pressed": String(n === which), style: n === "alle" ? null : { "--c": colorOf(n) },
     onclick: () => { which = n; history.replaceState(null, "", "/konsole/" + n); drawSeg(); fill(); input.focus(); },
-  }, n === "alle" ? null : h("span", { class: "dot" }), n === "alle" ? "Alle" : n)));
+  }, n === "alle" ? null : h("span", { class: "dot" }), n === "alle" ? T("Alle") : n)));
 
   log.addEventListener("scroll", () => {
     stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
@@ -761,7 +1051,7 @@ function pageConsole(main, rest) {
       const p = words[words.length - 1].toLowerCase();
       options = players().filter(n => n.toLowerCase().startsWith(p)).map(n => [...words.slice(0, -1), n].join(" ") + " ");
     } else {
-      options = v ? COMMANDS.filter(c => c.startsWith(v) && c !== v) : [];
+      options = v ? [...COMMANDS, ...(S.session.season ? CORE_COMMANDS : [])].filter(c => c.startsWith(v) && c !== v) : [];
     }
     sel = options.length ? 0 : -1;
     suggest.hidden = !options.length;
@@ -811,11 +1101,11 @@ function pageConsole(main, rest) {
 
   drawSeg();
   const panel = h("section", { class: "panel console" },
-    h("div", { class: "console-bar" }, seg, search, h("label", { class: "check" }, errBox, "Nur Warnungen und Fehler"),
+    h("div", { class: "console-bar" }, seg, search, h("label", { class: "check" }, errBox, T("Nur Warnungen und Fehler")),
       h("span", { style: { flex: "1" } }),
       ...(which !== "alle" ? powerButtons(S.overview.servers.find(s => s.name === which) || {}, true) : [])),
     h("div", { style: { position: "relative", minHeight: "0", display: "grid" } }, log, newer),
-    can("command") || can("players") ? h("div", { class: "prompt" }, suggest, h("label", null, ">"), input) : h("div", { class: "prompt dim" }, "Nur lesen."));
+    can("command") || can("players") ? h("div", { class: "prompt" }, suggest, h("label", null, ">"), input) : h("div", { class: "prompt dim" }, T("Nur lesen.")));
   main.append(panel);
   fill();
   input.focus();
@@ -825,64 +1115,64 @@ function pageConsole(main, rest) {
 
 function pagePlayers(main) {
   const body = h("div");
-  main.append(header("Spieler", "Wer gerade auf welchem Server ist. Die Liste erneuert sich alle zehn Sekunden."), body);
+  main.append(header(T("Spieler"), T("Wer gerade auf welchem Server ist. Die Liste erneuert sich alle zehn Sekunden.")), body);
   const draw = () => {
     const rows = S.overview.servers.flatMap(s => s.players.map(p => ({ name: p, server: s.name })));
     if (!rows.length) {
-      put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, "Gerade ist niemand online.")));
+      put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, T("Gerade ist niemand online."))));
       return;
     }
     put(body, h("section", { class: "panel" }, h("table", null,
-      h("thead", null, h("tr", null, h("th", null, "Spieler"), h("th", null, "Server"), h("th", { class: "right" }, ""))),
+      h("thead", null, h("tr", null, h("th", null, T("Spieler")), h("th", null, "Server"), h("th", { class: "right" }, ""))),
       h("tbody", null, rows.map(r => h("tr", null,
         h("td", null, h("span", { class: "player" }, h("img", { src: "https://mc-heads.net/avatar/" + encodeURIComponent(r.name) + "/48", alt: "" }), r.name)),
         h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(r.server) } }, r.server)),
         h("td", { class: "right" }, h("div", { class: "actions", style: { justifyContent: "flex-end" } },
-          can("players") ? h("button", { class: "btn small", onclick: () => message(r) }, "Nachricht") : null,
-          can("players") ? h("button", { class: "btn small danger", onclick: () => kick(r) }, "Kicken") : null))))))));
+          can("players") ? h("button", { class: "btn small", onclick: () => message(r) }, T("Nachricht")) : null,
+          can("players") ? h("button", { class: "btn small danger", onclick: () => kick(r) }, T("Kicken")) : null))))))));
   };
   draw();
   on("overview", draw);
 }
 
 async function message(r) {
-  const text = await confirmDialog({ title: "Nachricht an " + r.name, ok: "Senden", input: { label: "Text", required: true } });
+  const text = await confirmDialog({ title: T("Nachricht an ") + r.name, ok: T("Senden"), input: { label: T("Text"), required: true } });
   if (!text) return;
-  await run("Nachricht gesendet", () => api("POST", "/servers/" + r.server + "/command", { cmd: "tell " + r.name + " " + text }));
+  await run(T("Nachricht gesendet"), () => api("POST", "/servers/" + r.server + "/command", { cmd: "tell " + r.name + " " + text }));
 }
 
 async function kick(r) {
-  const reason = await confirmDialog({ title: r.name + " kicken?", text: "Der Grund steht auf seinem Bildschirm.", ok: "Kicken", danger: true, input: { label: "Grund", value: "Kurze Wartung, gleich wieder da." } });
+  const reason = await confirmDialog({ title: r.name + T(" kicken?"), text: T("Der Grund steht auf seinem Bildschirm."), ok: T("Kicken"), danger: true, input: { label: T("Grund"), value: T("Kurze Wartung, gleich wieder da.") } });
   if (reason == null) return;
-  await run(r.name + " gekickt", () => api("POST", "/servers/" + r.server + "/command", { cmd: "kick " + r.name + " " + reason }));
+  await run(r.name + T(" gekickt"), () => api("POST", "/servers/" + r.server + "/command", { cmd: "kick " + r.name + " " + reason }));
 }
 
 // ---- season --------------------------------------------------------------------------------------
 
 function pageSeason(main) {
-  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, "Lade..."));
+  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, T("Lade...")));
   const acts = h("span", { class: "actions" });
-  main.append(header("Season", "Was Kronwerke Core über die Season und die Ziele des Obelisken sagt.", acts), body);
+  main.append(header(T("Season"), T("Was Kronwerke Core über die Season und die Ziele des Obelisken sagt."), acts), body);
   const load = async () => {
     try {
       const d = await api("GET", "/season");
       if (!d.season) {
-        put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, d.server + " läuft nicht, die Season ist gerade nicht lesbar.")));
+        put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, d.server + T(" läuft nicht, die Season ist gerade nicht lesbar."))));
         return;
       }
       const s = d.season;
       const goals = Array.isArray(d.goals) ? d.goals : [];
       if (can("command")) {
         put(acts, s.running
-          ? h("button", { class: "btn quiet", onclick: () => core("kw admin season pause", "Season pausieren?", "Zurück in die Vorbereitung: Abgaben zählen nicht mehr, bis die Season wieder läuft.") }, "Pausieren")
-          : h("button", { class: "btn primary", onclick: () => core("kw admin season start", "Season starten?", "Ab jetzt zählen Abgaben und Fortschritt.") }, "Season starten"));
+          ? h("button", { class: "btn quiet", onclick: () => core("kw admin season pause", T("Season pausieren?"), T("Zurück in die Vorbereitung: Abgaben zählen nicht mehr, bis die Season wieder läuft.")) }, T("Pausieren"))
+          : h("button", { class: "btn primary", onclick: () => core("kw admin season start", T("Season starten?"), T("Ab jetzt zählen Abgaben und Fortschritt.")) }, T("Season starten")));
       }
       put(body, 
         h("section", { class: "panel" }, h("div", { class: "body", style: { display: "flex", flexWrap: "wrap", gap: "1rem 2.5rem" } },
-          h("div", null, h("div", { class: "muted" }, "Season"), h("b", { style: { fontSize: "1.25rem" } }, s.running ? "läuft" : "in Vorbereitung")),
-          h("div", null, h("div", { class: "muted" }, "Nummer"), h("b", { style: { fontSize: "1.25rem" } }, s.number)),
-          h("div", null, h("div", { class: "muted" }, "Obelisk"), h("b", { style: { fontSize: "1.25rem" } }, "Stufe " + s.tier + (s.slumbering ? ", schlummert" : ""))),
-          s.startedAt ? h("div", null, h("div", { class: "muted" }, "Gestartet"), h("b", { style: { fontSize: "1.25rem" } }, fmt.date(s.startedAt))) : null)),
+          h("div", null, h("div", { class: "muted" }, T("Season")), h("b", { style: { fontSize: "1.25rem" } }, s.running ? T("läuft") : T("in Vorbereitung"))),
+          h("div", null, h("div", { class: "muted" }, T("Nummer")), h("b", { style: { fontSize: "1.25rem" } }, s.number)),
+          h("div", null, h("div", { class: "muted" }, "Obelisk"), h("b", { style: { fontSize: "1.25rem" } }, T("Stufe ") + s.tier + (s.slumbering ? ", schlummert" : ""))),
+          s.startedAt ? h("div", null, h("div", { class: "muted" }, T("Gestartet")), h("b", { style: { fontSize: "1.25rem" } }, fmt.date(s.startedAt))) : null)),
         h("div", { class: "stages" }, goals.map(g => h("section", { class: "panel stage", "data-state": g.state },
           h("header", null, h("h2", null, g.title), h("p", null, g.state === "active" ? fmt.num(g.percent, 0) + " %" : g.state === "locked" ? "gesperrt" : g.state)),
           h("div", { class: "body" }, h("div", { class: "pillars" }, (g.pillars || []).map(p => h("div", null, h("h3", null, p.title),
@@ -892,7 +1182,7 @@ function pageSeason(main) {
                 h("div", { class: "bar-top" }, h("span", null, it.name), h("b", null, it.have + " / " + (it.target || "?"))),
                 h("div", { class: "meter" }, h("span", { style: { width: Math.min(100, pct * 100).toFixed(1) + "%", background: "var(--gold)" } })));
             }))))),
-            g.recent?.length ? h("p", { class: "muted", style: { marginTop: "1rem" } }, "Zuletzt: " + g.recent.slice(0, 3).map(r => r.name.trim() + " " + r.amount + " " + r.itemName).join(", ")) : null)))));
+            g.recent?.length ? h("p", { class: "muted", style: { marginTop: "1rem" } }, T("Zuletzt: ") + g.recent.slice(0, 3).map(r => r.name.trim() + " " + r.amount + " " + r.itemName).join(", ")) : null)))));
     } catch (e) {
       put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, e.message)));
     }
@@ -901,7 +1191,7 @@ function pageSeason(main) {
 }
 
 async function core(cmd, title, text) {
-  if (!(await confirmDialog({ title, text, ok: "Ja" }))) return;
+  if (!(await confirmDialog({ title, text, ok: T("Ja") }))) return;
   await run(title.replace("?", ""), () => api("POST", "/servers/" + S.overview.servers[0].name + "/command", { cmd }));
   if (S.page?.path === "/season") route();
 }
@@ -916,8 +1206,8 @@ function newer(a, b) {
 }
 
 function pagePack(main) {
-  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, "Lade..."));
-  main.append(header("Pack und Mods", "Was auf dem Server läuft und was im Repository wartet."), body);
+  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, T("Lade...")));
+  main.append(header(T("Pack und Mods"), T("Was auf dem Server läuft und was im Repository wartet.")), body);
   const load = async fresh => {
     const p = await api("GET", "/pack" + (fresh ? "?fresh=1" : ""));
     const local = p.local?.version, remote = p.remote?.version;
@@ -929,14 +1219,14 @@ function pagePack(main) {
     const players = S.overview.servers.reduce((n, s) => n + s.players.length, 0);
     const update = async () => {
       const ok = await confirmDialog({
-        title: "Pack auf " + (remote || "den neuesten Stand") + " bringen?",
-        text: "Alle Server stoppen, packwiz holt Mods und Configs, dann starten sie wieder. " + (players ? players + " Spieler fliegen dabei raus." : "Gerade ist niemand online."),
-        ok: "Aktualisieren", danger: players > 0,
+        title: T("Pack auf ") + (remote || T("den neuesten Stand")) + " bringen?",
+        text: T("Alle Server stoppen, packwiz holt Mods und Configs, dann starten sie wieder. ") + (players ? players + " Spieler fliegen dabei raus." : T("Gerade ist niemand online.")),
+        ok: T("Aktualisieren"), danger: players > 0,
       });
-      if (ok) { await run("Pack-Update läuft", () => api("POST", "/pack/update", {})); go("/konsole/" + S.overview.servers[0].name); }
+      if (ok) { await run(T("Pack-Update läuft"), () => api("POST", "/pack/update", {})); go("/konsole/" + S.overview.servers[0].name); }
     };
     const mods = p.mods || [];
-    const q = h("input", { type: "search", placeholder: mods.length + " Mods durchsuchen", "aria-label": "Mods durchsuchen" });
+    const q = h("input", { type: "search", placeholder: mods.length + T(" Mods durchsuchen"), "aria-label": T("Mods durchsuchen") });
     const tbody = h("tbody");
     const drawMods = () => put(tbody, ...mods.filter(m => m.file.toLowerCase().includes(q.value.toLowerCase())).map(m =>
       h("tr", null, h("td", null, m.file.startsWith("kronwerke-core") ? h("b", null, m.file) : m.file), h("td", { class: "right dim" }, fmt.bytes(m.size)))));
@@ -944,14 +1234,14 @@ function pagePack(main) {
     drawMods();
     put(body, 
       h("section", { class: "panel" }, h("div", { class: "body", style: { display: "flex", flexWrap: "wrap", gap: "1rem 2.5rem", alignItems: "center" } },
-        h("div", null, h("div", { class: "muted" }, "Auf dem Server"), h("b", { style: { fontSize: "1.5rem" } }, local || "?")),
-        h("div", null, h("div", { class: "muted" }, "Im Repository"), h("b", { style: { fontSize: "1.5rem" } }, remote || (p.remote?.error ? "nicht erreichbar" : "?"))),
+        h("div", null, h("div", { class: "muted" }, T("Auf dem Server")), h("b", { style: { fontSize: "1.5rem" } }, local || "?")),
+        h("div", null, h("div", { class: "muted" }, T("Im Repository")), h("b", { style: { fontSize: "1.5rem" } }, remote || (p.remote?.error ? T("nicht erreichbar") : "?"))),
         h("div", null, h("div", { class: "muted" }, "NeoForge"), h("b", null, p.local?.neoforge || "?")),
         h("span", { style: { flex: "1" } }),
-        p.updating ? h("span", { class: "pill warn" }, "Update läuft") : behind ? h("span", { class: "pill warn" }, sections.length + (sections.length === 1 ? " Version" : " Versionen") + " dahinter") : h("span", { class: "pill ok" }, "Aktuell"),
-        h("button", { class: "btn quiet", onclick: () => load(true) }, "Neu prüfen"),
-        can("pack") ? h("button", { class: "btn " + (behind ? "primary" : ""), onclick: update, disabled: p.updating || null }, "Pack aktualisieren") : null)),
-      sections.length ? h("section", { class: "panel" }, h("header", null, h("h2", null, "Was dazukommt")),
+        p.updating ? h("span", { class: "pill warn" }, T("Update läuft")) : behind ? h("span", { class: "pill warn" }, sections.length + (sections.length === 1 ? " Version" : T(" Versionen")) + " dahinter") : h("span", { class: "pill ok" }, T("Aktuell")),
+        h("button", { class: "btn quiet", onclick: () => load(true) }, T("Neu prüfen")),
+        can("pack") ? h("button", { class: "btn " + (behind ? "primary" : ""), onclick: update, disabled: p.updating || null }, T("Pack aktualisieren")) : null)),
+      sections.length ? h("section", { class: "panel" }, h("header", null, h("h2", null, T("Was dazukommt"))),
         h("div", { class: "body stack" }, sections.map(s => h("div", null, h("b", null, s.v), h("div", { class: "muted", style: { whiteSpace: "pre-wrap", marginTop: "0.3rem" } }, s.text))))) : null,
       h("section", { class: "panel" }, h("header", null, h("h2", null, "Mods"), q), h("table", null, tbody)));
   };
@@ -966,12 +1256,12 @@ function pageFiles(main, rest) {
   const server = servers.includes(parts[0]) ? parts[0] : servers[0];
   const path = servers.includes(parts[0]) ? parts.slice(1).join("/") : "";
   const at = p => "/dateien/" + server + (p ? "/" + p : "");
-  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, "Lade..."));
+  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, T("Lade...")));
   const seg = h("div", { class: "seg" }, servers.map(n => h("button", { type: "button", "aria-pressed": String(n === server), style: { "--c": colorOf(n) }, onclick: () => go("/dateien/" + n) }, h("span", { class: "dot" }), n)));
-  const crumbs = h("nav", { class: "crumbs", "aria-label": "Pfad" },
+  const crumbs = h("nav", { class: "crumbs", "aria-label": T("Pfad") },
     h("a", { href: at(""), "data-link": true }, server),
     path.split("/").filter(Boolean).flatMap((p, i, arr) => [h("span", null, "/"), h("a", { href: at(arr.slice(0, i + 1).join("/")), "data-link": true }, p)]));
-  main.append(header("Dateien", "Configs, KubeJS und Mods dürfen geändert werden, die Welt nur gelesen. Schlüssel bleiben unsichtbar.", seg), body);
+  main.append(header(T("Dateien"), T("Configs, KubeJS und Mods dürfen geändert werden, die Welt nur gelesen. Schlüssel bleiben unsichtbar."), seg), body);
 
   api("GET", "/servers/" + server + "/files?path=" + encodeURIComponent(path)).then(d => {
     if (d.dir) {
@@ -982,17 +1272,17 @@ function pageFiles(main, rest) {
           let s = "";
           const b = new Uint8Array(buf);
           for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
-          await run(f.name + " hochgeladen", () => api("PUT", "/servers/" + server + "/files", { path: (path ? path + "/" : "") + f.name, data: btoa(s) }));
+          await run(f.name + T(" hochgeladen"), () => api("PUT", "/servers/" + server + "/files", { path: (path ? path + "/" : "") + f.name, data: btoa(s) }));
         }
         route();
       });
       const entries = d.entries.sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
       put(body, h("section", { class: "panel files" },
-        h("header", null, crumbs, h("div", { class: "actions" }, up, h("button", { class: "btn small", onclick: () => up.click() }, svg(ICON.upload), "Hochladen"))),
+        h("header", null, crumbs, h("div", { class: "actions" }, up, h("button", { class: "btn small", onclick: () => up.click() }, svg(ICON.upload), T("Hochladen")))),
         entries.length ? h("table", null, h("tbody", null, entries.map(e => h("tr", null,
           h("td", null, h("a", { href: at((path ? path + "/" : "") + e.name), "data-link": true }, svg(e.dir ? ICON.folder : ICON.file), e.name)),
           h("td", { class: "right dim hide-s" }, e.dir ? "" : fmt.bytes(e.size)),
-          h("td", { class: "right dim hide-s" }, fmt.date(e.modified)))))) : h("p", { class: "empty" }, "Der Ordner ist leer.")));
+          h("td", { class: "right dim hide-s" }, fmt.date(e.modified)))))) : h("p", { class: "empty" }, T("Der Ordner ist leer."))));
       return;
     }
     const bytes = Uint8Array.from(atob(d.data), c => c.charCodeAt(0));
@@ -1009,11 +1299,11 @@ function pageFiles(main, rest) {
       const enc = new TextEncoder().encode(area.value);
       let s = "";
       for (let i = 0; i < enc.length; i += 0x8000) s += String.fromCharCode(...enc.subarray(i, i + 0x8000));
-      await run(name + " gespeichert", () => api("PUT", "/servers/" + server + "/files", { path, data: btoa(s) }));
+      await run(name + T(" gespeichert"), () => api("PUT", "/servers/" + server + "/files", { path, data: btoa(s) }));
     };
     const del = async () => {
-      if (!(await confirmDialog({ title: name + " löschen?", text: "Das lässt sich nicht rückgängig machen.", ok: "Löschen", danger: true }))) return;
-      await run(name + " gelöscht", () => api("DELETE", "/servers/" + server + "/files?path=" + encodeURIComponent(path)));
+      if (!(await confirmDialog({ title: name + T(" löschen?"), text: T("Das lässt sich nicht rückgängig machen."), ok: T("Löschen"), danger: true }))) return;
+      await run(name + T(" gelöscht"), () => api("DELETE", "/servers/" + server + "/files?path=" + encodeURIComponent(path)));
       go(at(path.split("/").slice(0, -1).join("/")));
     };
     if (area) {
@@ -1028,11 +1318,11 @@ function pageFiles(main, rest) {
     }
     put(body, h("section", { class: "panel" },
       h("header", null, crumbs, h("div", { class: "actions" },
-        h("span", { class: "dim" }, fmt.bytes(d.size) + (d.writable ? "" : ", nur lesen")),
-        h("button", { class: "btn small", onclick: download }, svg(ICON.download), "Herunterladen"),
-        d.writable ? h("button", { class: "btn small danger", onclick: del }, "Löschen") : null,
-        d.writable && area ? h("button", { class: "btn small primary", onclick: save }, "Speichern") : null)),
-      area || h("p", { class: "empty" }, "Binärdatei, nur zum Herunterladen.")));
+        h("span", { class: "dim" }, fmt.bytes(d.size) + (d.writable ? "" : T(", nur lesen"))),
+        h("button", { class: "btn small", onclick: download }, svg(ICON.download), T("Herunterladen")),
+        d.writable ? h("button", { class: "btn small danger", onclick: del }, T("Löschen")) : null,
+        d.writable && area ? h("button", { class: "btn small primary", onclick: save }, T("Speichern")) : null)),
+      area || h("p", { class: "empty" }, T("Binärdatei, nur zum Herunterladen."))));
   }).catch(e => put(body, h("section", { class: "panel" }, h("header", null, crumbs), h("p", { class: "empty" }, e.message))));
 }
 
@@ -1040,9 +1330,9 @@ function pageFiles(main, rest) {
 
 function pageResources(main) {
   const body = h("div", { class: "stack" });
-  main.append(header("Ressourcen", "CPU-Anteile wirken sofort, Arbeitsspeicher ab dem nächsten Start des Servers."), body);
+  main.append(header(T("Ressourcen"), T("CPU-Anteile wirken sofort, Arbeitsspeicher ab dem nächsten Start des Servers.")), body);
   const setServer = (s, key, value, label) => run(label, () => api("POST", "/servers/" + s + "/config", { key, value: String(value) })).then(refreshOverview);
-  const setLauncher = (key, value) => run("Gespeichert", () => api("POST", "/launcher/config", { key, value: String(value) })).then(refreshOverview);
+  const setLauncher = (key, value) => run(T("Gespeichert"), () => api("POST", "/launcher/config", { key, value: String(value) })).then(refreshOverview);
   const draw = () => {
     const o = S.overview, c = o.container;
     const cells = [];
@@ -1054,34 +1344,34 @@ function pageResources(main) {
     const sumHeap = o.servers.reduce((n, s) => n + (parseInt(s.memory, 10) || 0) * (/M$/i.test(s.memory) ? 1 / 1024 : 1), 0);
     put(body, 
       h("section", { class: "panel" },
-        h("header", null, h("h2", null, "CPU"), h("p", null, fmt.num(c.cpuLimit, 1) + " Kerne erlaubt, " + c.cpus + " sichtbar")),
+        h("header", null, h("h2", null, "CPU"), h("p", null, fmt.num(c.cpuLimit, 1) + T(" Kerne erlaubt, ") + c.cpus + " sichtbar")),
         h("div", { class: "body stack" },
-          h("div", { class: "cpus", "aria-label": "Welcher Server welche CPU nutzt" }, cells),
+          h("div", { class: "cpus", "aria-label": T("Welcher Server welche CPU nutzt") }, cells),
           can("config") ? h("div", { class: "actions" },
-            h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: c.pin || null, onchange: e => setLauncher("cpu.pin", e.target.checked) }), "Server auf ihre Anteile begrenzen"),
-            h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: c.balance || null, disabled: !c.pin || null, onchange: e => setLauncher("cpu.balance", e.target.checked) }), "Automatisch umverteilen, wenn einer hängt")) : null,
+            h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: c.pin || null, onchange: e => setLauncher("cpu.pin", e.target.checked) }), T("Server auf ihre Anteile begrenzen")),
+            h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: c.balance || null, disabled: !c.pin || null, onchange: e => setLauncher("cpu.balance", e.target.checked) }), T("Automatisch umverteilen, wenn einer hängt"))) : null,
           h("div", { class: "stack" }, o.servers.map(s => {
             const out = h("output", { class: "num" }, s.share);
-            const range = h("input", { type: "range", min: 1, max: 16, value: s.share, style: { "--c": colorOf(s.name) }, disabled: !can("config") || null, "aria-label": "CPU-Anteil " + s.name });
+            const range = h("input", { type: "range", min: 1, max: 16, value: s.share, style: { "--c": colorOf(s.name) }, disabled: !can("config") || null, "aria-label": T("CPU-Anteil ") + s.name });
             range.addEventListener("input", () => { out.textContent = range.value; });
-            range.addEventListener("change", () => setServer(s.name, "cpu.share", range.value, s.name + " bekommt Anteil " + range.value));
+            range.addEventListener("change", () => setServer(s.name, "cpu.share", range.value, s.name + T(" bekommt Anteil ") + range.value));
             return h("div", { class: "share" }, h("span", { class: "pill c", style: { "--c": colorOf(s.name) } }, s.name), range, out);
           })))),
       h("section", { class: "panel" },
-        h("header", null, h("h2", null, "Arbeitsspeicher"), h("p", null, fmt.num(sumHeap, 0) + " GB Heap vergeben, " + (c.memoryLimitGb || "?") + " GB im Container, pro Server 3 GB Puffer")),
-        h("table", null, h("thead", null, h("tr", null, h("th", null, "Server"), h("th", null, "Heap"), h("th", { class: "hide-s" }, "Belegt"), h("th", null, "Autostart"), h("th", null, "Nach Absturz neu"))),
+        h("header", null, h("h2", null, T("Arbeitsspeicher")), h("p", null, fmt.num(sumHeap, 0) + T(" GB Heap vergeben, ") + (c.memoryLimitGb || "?") + T(" GB im Container, pro Server 3 GB Puffer"))),
+        h("table", null, h("thead", null, h("tr", null, h("th", null, "Server"), h("th", null, "Heap"), h("th", { class: "hide-s" }, T("Belegt")), h("th", null, "Autostart"), h("th", null, T("Nach Absturz neu")))),
           h("tbody", null, o.servers.map(s => {
-            const mem = h("input", { type: "text", value: s.memory, size: 6, disabled: !can("config") || null, "aria-label": "Heap " + s.name });
-            mem.addEventListener("change", () => setServer(s.name, "memory", mem.value.trim().toUpperCase(), s.name + ": Heap " + mem.value));
+            const mem = h("input", { type: "text", value: s.memory, size: 6, disabled: !can("config") || null, "aria-label": T("Heap ") + s.name });
+            mem.addEventListener("change", () => setServer(s.name, "memory", mem.value.trim().toUpperCase(), s.name + T(": Heap ") + mem.value));
             return h("tr", null,
               h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(s.name) } }, s.name)),
               h("td", null, mem),
               h("td", { class: "hide-s dim" }, fmt.bytes(s.last?.rss)),
-              h("td", null, h("input", { type: "checkbox", class: "switch", checked: s.autostart || null, disabled: !can("config") || null, onchange: e => setServer(s.name, "autostart", e.target.checked, "Gespeichert") })),
-              h("td", null, h("input", { type: "checkbox", class: "switch", checked: s.restartOnCrash || null, disabled: !can("config") || null, onchange: e => setServer(s.name, "restart.on.crash", e.target.checked, "Gespeichert") })));
+              h("td", null, h("input", { type: "checkbox", class: "switch", checked: s.autostart || null, disabled: !can("config") || null, onchange: e => setServer(s.name, "autostart", e.target.checked, T("Gespeichert")) })),
+              h("td", null, h("input", { type: "checkbox", class: "switch", checked: s.restartOnCrash || null, disabled: !can("config") || null, onchange: e => setServer(s.name, "restart.on.crash", e.target.checked, T("Gespeichert")) })));
           })))),
       h("section", { class: "panel" },
-        h("header", null, h("h2", null, "Langsamste Dimensionen"), h("p", null, "Aus neoforge tps, alle zehn Sekunden")),
+        h("header", null, h("h2", null, T("Langsamste Dimensionen")), h("p", null, T("Aus neoforge tps, alle zehn Sekunden"))),
         h("table", null, h("tbody", null, o.servers.flatMap(s => (s.dimensions || []).slice(0, 6).map(d => h("tr", null,
           h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(s.name) } }, s.name)),
           h("td", null, d.name),
@@ -1095,22 +1385,22 @@ function pageResources(main) {
 // ---- history -----------------------------------------------------------------------------------------
 
 function pageHistory(main, rest) {
-  const tabs = [["zeitleiste", "Zeitleiste"], ["protokoll", "Wer hat was getan"], ["abstuerze", "Abstürze"]];
+  const tabs = [["zeitleiste", T("Zeitleiste")], ["protokoll", T("Wer hat was getan")], ["abstuerze", T("Abstürze")]];
   const tab = tabs.some(t => t[0] === rest) ? rest : "zeitleiste";
   const body = h("div", { class: "stack" });
-  main.append(header("Verlauf", null, h("div", { class: "seg" }, tabs.map(([k, n]) => h("button", { type: "button", "aria-pressed": String(k === tab), onclick: () => go("/verlauf/" + k, true) }, n)))), body);
+  main.append(header(T("Verlauf"), null, h("div", { class: "seg" }, tabs.map(([k, n]) => h("button", { type: "button", "aria-pressed": String(k === tab), onclick: () => go("/verlauf/" + k, true) }, n)))), body);
   if (tab === "zeitleiste") {
     const draw = () => put(body, h("section", { class: "panel" }, timeline([...S.overview.events].reverse(), "tl-all")));
     draw();
     on("event", draw);
   } else if (tab === "protokoll") {
     api("GET", "/audit?n=300").then(rows => put(body, h("section", { class: "panel" }, rows.length ? h("table", null,
-      h("thead", null, h("tr", null, h("th", null, "Wann"), h("th", null, "Wer"), h("th", null, "Was"), h("th", { class: "hide-s" }, "Von"))),
+      h("thead", null, h("tr", null, h("th", null, T("Wann")), h("th", null, T("Wer")), h("th", null, T("Was")), h("th", { class: "hide-s" }, T("Von")))),
       h("tbody", null, rows.map(r => h("tr", null,
         h("td", { class: "dim" }, fmt.date(r.t)),
-        h("td", null, r.who || "unbekannt", r.via === "key" ? h("span", { class: "pill", style: { marginLeft: "0.4rem" } }, "Schlüssel") : null),
-        h("td", null, r.ok ? "" : h("span", { class: "pill bad", style: { marginRight: "0.4rem" } }, "fehlgeschlagen"), r.action, r.server ? " auf " + r.server : "", r.detail ? h("div", { class: "dim" }, r.detail) : null),
-        h("td", { class: "dim hide-s" }, r.ip))))) : h("p", { class: "empty" }, "Noch keine Einträge."))));
+        h("td", null, r.who || T("unbekannt"), r.via === "key" ? h("span", { class: "pill", style: { marginLeft: "0.4rem" } }, T("Schlüssel")) : null),
+        h("td", null, r.ok ? "" : h("span", { class: "pill bad", style: { marginRight: "0.4rem" } }, T("fehlgeschlagen")), r.action, r.server ? T(" auf ") + r.server : "", r.detail ? h("div", { class: "dim" }, r.detail) : null),
+        h("td", { class: "dim hide-s" }, r.ip))))) : h("p", { class: "empty" }, T("Noch keine Einträge.")))));
   } else {
     Promise.all(S.overview.servers.map(s => api("GET", "/servers/" + s.name + "/crashes").then(list => list.map(c => ({ ...c, server: s.name }))))).then(all => {
       const rows = all.flat().sort((a, b) => b.modified - a.modified);
@@ -1118,8 +1408,8 @@ function pageHistory(main, rest) {
         h("td", { class: "dim" }, fmt.date(c.modified)),
         h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(c.server) } }, c.server)),
         h("td", null, c.headline || c.name),
-        h("td", { class: "right" }, can("files") ? h("a", { class: "btn small", href: "/dateien/" + c.server + "/crash-reports/" + c.name, "data-link": true }, "Lesen") : null)))))
-        : h("p", { class: "empty" }, "Keine Absturzberichte. So soll es sein.")));
+        h("td", { class: "right" }, can("files") ? h("a", { class: "btn small", href: "/dateien/" + c.server + "/crash-reports/" + c.name, "data-link": true }, T("Lesen")) : null)))))
+        : h("p", { class: "empty" }, T("Keine Absturzberichte. So soll es sein."))));
     });
   }
 }
@@ -1128,120 +1418,120 @@ function pageHistory(main, rest) {
 
 function pageAccess(main) {
   const body = h("div", { class: "stack" });
-  main.append(header("Zugang", "Passkeys statt Passwörtern. Schlüssel für Programme wie Elchi Ops.",
-    h("button", { class: "btn quiet", onclick: async () => { await api("POST", "/auth/logout", {}); S.session.user = null; door("login", "Abgemeldet."); } }, "Abmelden")), body);
+  main.append(header(T("Zugang"), T("Passkeys statt Passwörtern. Schlüssel für Programme."),
+    h("button", { class: "btn quiet", onclick: async () => { await api("POST", "/auth/logout", {}); S.session.user = null; door("login", T("Abgemeldet.")); } }, T("Abmelden"))), body);
   const addPasskey = async () => {
     try {
       const o = await api("POST", "/auth/register/options", { purpose: "add" });
       const cred = await createPasskey(o.options);
       await api("POST", "/auth/register", { id: o.id, credential: cred, label: deviceLabel() });
-      toast("Passkey hinzugefügt", deviceLabel());
+      toast(T("Passkey hinzugefügt"), deviceLabel());
       route();
-    } catch (e) { toast("Passkey nicht angelegt", passkeyError(e), true); }
+    } catch (e) { toast(T("Passkey nicht angelegt"), passkeyError(e), true); }
   };
   api("GET", "/access").then(a => {
     if (a.me) {
-      put(body, h("section", { class: "panel" }, h("div", { class: "body" }, h("p", null, "Angemeldet als ", h("b", null, a.me.name), ", Rolle ", ROLE_DE[a.me.role] || a.me.role, "."),
-        h("button", { class: "btn", onclick: addPasskey }, svg(ICON.key), "Weiteren Passkey anlegen"))));
+      put(body, h("section", { class: "panel" }, h("div", { class: "body" }, h("p", null, T("Angemeldet als "), h("b", null, a.me.name), T(", Rolle "), T(ROLE_DE[a.me.role]) || a.me.role, "."),
+        h("button", { class: "btn", onclick: addPasskey }, svg(ICON.key), T("Weiteren Passkey anlegen")))));
       return;
     }
     const me = S.session.user.id;
     const invite = async () => {
-      const role = h("select", null, a.roles.filter(r => r !== "owner").map(r => h("option", { value: r }, ROLE_DE[r])), h("option", { value: "owner" }, ROLE_DE.owner));
-      const name = h("input", { type: "text", placeholder: "Name, optional" });
-      const d = h("dialog", null, h("form", { method: "dialog" }, h("h2", null, "Jemanden einladen"),
-        h("p", null, "Der Link gilt 24 Stunden und nur einmal. Wer ihn öffnet, legt seinen Passkey an."),
-        h("label", { class: "field" }, h("span", null, "Rolle"), role), h("label", { class: "field" }, h("span", null, "Name"), name),
-        h("div", { class: "actions" }, h("button", { class: "btn quiet", value: "cancel" }, "Abbrechen"), h("button", { class: "btn primary", value: "ok" }, "Link erstellen"))));
+      const role = h("select", null, a.roles.filter(r => r !== "owner").map(r => h("option", { value: r }, T(ROLE_DE[r]))), h("option", { value: "owner" }, T(ROLE_DE.owner)));
+      const name = h("input", { type: "text", placeholder: T("Name, optional") });
+      const d = h("dialog", null, h("form", { method: "dialog" }, h("h2", null, T("Jemanden einladen")),
+        h("p", null, T("Der Link gilt 24 Stunden und nur einmal. Wer ihn öffnet, legt seinen Passkey an.")),
+        h("label", { class: "field" }, h("span", null, T("Rolle")), role), h("label", { class: "field" }, h("span", null, T("Name")), name),
+        h("div", { class: "actions" }, h("button", { class: "btn quiet", value: "cancel" }, T("Abbrechen")), h("button", { class: "btn primary", value: "ok" }, T("Link erstellen")))));
       document.body.append(d);
       d.addEventListener("close", async () => {
         d.remove();
         if (d.returnValue !== "ok") return;
-        const r = await run("Einladung erstellt", () => api("POST", "/access/invites", { role: role.value, name: name.value }));
-        infoDialog("Einladungslink", "Schick ihn direkt an die Person. Er zeigt sich nur jetzt.", r.link);
+        const r = await run(T("Einladung erstellt"), () => api("POST", "/access/invites", { role: role.value, name: name.value }));
+        infoDialog(T("Einladungslink"), T("Schick ihn direkt an die Person. Er zeigt sich nur jetzt."), r.link);
         route();
       });
       d.showModal();
     };
     const newKey = async () => {
-      const name = h("input", { type: "text", placeholder: "Elchi Ops", required: true, maxlength: 60 });
-      const days = h("select", null, h("option", { value: "0" }, "Läuft nicht ab"), h("option", { value: "30" }, "30 Tage"), h("option", { value: "90" }, "90 Tage"), h("option", { value: "365" }, "Ein Jahr"));
-      const boxes = a.scopes.map(s => h("label", { class: "check" }, h("input", { type: "checkbox", value: s, checked: s !== "config" || null }), SCOPE_DE[s] || s));
-      const d = h("dialog", null, h("form", { method: "dialog" }, h("h2", null, "Neuer API-Schlüssel"),
-        h("p", null, "Für Programme, die die Console ohne Passkey nutzen. Der Schlüssel zeigt sich einmal, danach nur noch sein Anfang."),
-        h("label", { class: "field" }, h("span", null, "Name"), name), h("label", { class: "field" }, h("span", null, "Gültig"), days),
-        h("div", { class: "field" }, h("span", null, "Darf"), h("div", { style: { display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem" } }, boxes)),
-        h("div", { class: "actions" }, h("button", { class: "btn quiet", value: "cancel", formnovalidate: true }, "Abbrechen"), h("button", { class: "btn primary", value: "ok" }, "Erstellen"))));
+      const name = h("input", { type: "text", placeholder: T("Name"), required: true, maxlength: 60 });
+      const days = h("select", null, h("option", { value: "0" }, T("Läuft nicht ab")), h("option", { value: "30" }, T("30 Tage")), h("option", { value: "90" }, T("90 Tage")), h("option", { value: "365" }, T("Ein Jahr")));
+      const boxes = a.scopes.map(s => h("label", { class: "check" }, h("input", { type: "checkbox", value: s, checked: s !== "config" || null }), T(SCOPE_DE[s]) || s));
+      const d = h("dialog", null, h("form", { method: "dialog" }, h("h2", null, T("Neuer API-Schlüssel")),
+        h("p", null, T("Für Programme, die die Console ohne Passkey nutzen. Der Schlüssel zeigt sich einmal, danach nur noch sein Anfang.")),
+        h("label", { class: "field" }, h("span", null, T("Name")), name), h("label", { class: "field" }, h("span", null, T("Gültig")), days),
+        h("div", { class: "field" }, h("span", null, T("Darf")), h("div", { style: { display: "flex", flexWrap: "wrap", gap: "0.5rem 1rem" } }, boxes)),
+        h("div", { class: "actions" }, h("button", { class: "btn quiet", value: "cancel", formnovalidate: true }, T("Abbrechen")), h("button", { class: "btn primary", value: "ok" }, T("Erstellen")))));
       document.body.append(d);
       d.addEventListener("close", async () => {
         d.remove();
         if (d.returnValue !== "ok") return;
         const scopes = boxes.map(b => $("input", b)).filter(i => i.checked).map(i => i.value);
-        const r = await run("Schlüssel erstellt", () => api("POST", "/access/keys", { name: name.value, scopes, days: Number(days.value) }));
-        infoDialog("Dein API-Schlüssel", "Als Bearer-Token senden. Er erscheint nie wieder; wer ihn verliert, erstellt einen neuen.", r.token);
+        const r = await run(T("Schlüssel erstellt"), () => api("POST", "/access/keys", { name: name.value, scopes, days: Number(days.value) }));
+        infoDialog(T("Dein API-Schlüssel"), T("Als Bearer-Token senden. Er erscheint nie wieder; wer ihn verliert, erstellt einen neuen."), r.token);
         route();
       });
       d.showModal();
     };
     put(body, 
-      h("section", { class: "panel" }, h("header", null, h("h2", null, "Personen"), h("div", { class: "actions" },
-        h("button", { class: "btn small", onclick: addPasskey }, svg(ICON.key), "Passkey für mich"),
-        h("button", { class: "btn small primary", onclick: invite }, "Einladen"))),
+      h("section", { class: "panel" }, h("header", null, h("h2", null, T("Personen")), h("div", { class: "actions" },
+        h("button", { class: "btn small", onclick: addPasskey }, svg(ICON.key), T("Passkey für mich")),
+        h("button", { class: "btn small primary", onclick: invite }, T("Einladen")))),
         h("table", null, h("tbody", null, a.users.map(u => h("tr", null,
-          h("td", null, h("b", null, u.name), u.id === me ? h("span", { class: "dim" }, " (du)") : null,
+          h("td", null, h("b", null, u.name), u.id === me ? h("span", { class: "dim" }, T(" (du)")) : null,
             h("div", { class: "dim" }, u.passkeys.map(p => p.label).join(", "))),
-          h("td", null, u.id === me ? ROLE_DE[u.role] : h("select", { "aria-label": "Rolle von " + u.name, onchange: e => run("Rolle geändert", () => api("POST", "/access/users/" + u.id, { role: e.target.value })) },
-            a.roles.map(r => h("option", { value: r, selected: r === u.role || null }, ROLE_DE[r])))),
-          h("td", { class: "dim hide-s" }, u.sessions + (u.sessions === 1 ? " Sitzung" : " Sitzungen")),
+          h("td", null, u.id === me ? T(ROLE_DE[u.role]) : h("select", { "aria-label": T("Rolle von ") + u.name, onchange: e => run(T("Rolle geändert"), () => api("POST", "/access/users/" + u.id, { role: e.target.value })) },
+            a.roles.map(r => h("option", { value: r, selected: r === u.role || null }, T(ROLE_DE[r]))))),
+          h("td", { class: "dim hide-s" }, u.sessions + (u.sessions === 1 ? " Sitzung" : T(" Sitzungen"))),
           h("td", { class: "right" }, u.id === me ? (u.passkeys.length > 1 ? u.passkeys.map(p => h("button", { class: "btn small quiet", onclick: async () => {
-            if (await confirmDialog({ title: "Passkey " + p.label + " entfernen?", ok: "Entfernen", danger: true })) { await run("Entfernt", () => api("DELETE", "/access/passkeys/" + encodeURIComponent(p.id), { user: u.id })); route(); }
+            if (await confirmDialog({ title: "Passkey " + p.label + " entfernen?", ok: T("Entfernen"), danger: true })) { await run(T("Entfernt"), () => api("DELETE", "/access/passkeys/" + encodeURIComponent(p.id), { user: u.id })); route(); }
           } }, p.label + " entfernen")) : null) : h("button", { class: "btn small danger", onclick: async () => {
-            if (await confirmDialog({ title: u.name + " entfernen?", text: "Alle Passkeys und Sitzungen der Person enden sofort.", ok: "Entfernen", danger: true })) { await run(u.name + " entfernt", () => api("DELETE", "/access/users/" + u.id, {})); route(); }
-          } }, "Entfernen"))))))),
-      a.invites.length ? h("section", { class: "panel" }, h("header", null, h("h2", null, "Offene Einladungen")),
-        h("table", null, h("tbody", null, a.invites.map(i => h("tr", null, h("td", null, i.name || "ohne Name"), h("td", null, ROLE_DE[i.role]), h("td", { class: "dim" }, "bis " + fmt.date(i.expires * 1000)),
-          h("td", { class: "right" }, h("button", { class: "btn small quiet", onclick: async () => { await run("Einladung zurückgezogen", () => api("DELETE", "/access/invites/" + i.id, {})); route(); } }, "Zurückziehen"))))))) : null,
-      h("section", { class: "panel" }, h("header", null, h("h2", null, "API-Schlüssel"), h("button", { class: "btn small", onclick: newKey }, svg(ICON.key), "Neuer Schlüssel")),
+            if (await confirmDialog({ title: u.name + " entfernen?", text: T("Alle Passkeys und Sitzungen der Person enden sofort."), ok: T("Entfernen"), danger: true })) { await run(u.name + " entfernt", () => api("DELETE", "/access/users/" + u.id, {})); route(); }
+          } }, T("Entfernen")))))))),
+      a.invites.length ? h("section", { class: "panel" }, h("header", null, h("h2", null, T("Offene Einladungen"))),
+        h("table", null, h("tbody", null, a.invites.map(i => h("tr", null, h("td", null, i.name || T("ohne Name")), h("td", null, T(ROLE_DE[i.role])), h("td", { class: "dim" }, T("bis ") + fmt.date(i.expires * 1000)),
+          h("td", { class: "right" }, h("button", { class: "btn small quiet", onclick: async () => { await run(T("Einladung zurückgezogen"), () => api("DELETE", "/access/invites/" + i.id, {})); route(); } }, T("Zurückziehen")))))))) : null,
+      h("section", { class: "panel" }, h("header", null, h("h2", null, T("API-Schlüssel")), h("button", { class: "btn small", onclick: newKey }, svg(ICON.key), T("Neuer Schlüssel"))),
         a.keys.length ? h("table", null, h("tbody", null, a.keys.map(k => h("tr", null,
           h("td", null, h("b", null, k.name), h("div", { class: "dim" }, k.prefix + "...")),
-          h("td", { class: "hide-s" }, (k.scopes || []).map(s => h("span", { class: "pill", style: { marginRight: "0.3rem" } }, SCOPE_DE[s] || s))),
-          h("td", { class: "dim" }, k.used ? "zuletzt " + fmt.date(k.used * 1000) : "nie benutzt", k.expires ? h("div", null, "bis " + fmt.date(k.expires * 1000)) : null),
+          h("td", { class: "hide-s" }, (k.scopes || []).map(s => h("span", { class: "pill", style: { marginRight: "0.3rem" } }, T(SCOPE_DE[s]) || s))),
+          h("td", { class: "dim" }, k.used ? T("zuletzt ") + fmt.date(k.used * 1000) : T("nie benutzt"), k.expires ? h("div", null, T("bis ") + fmt.date(k.expires * 1000)) : null),
           h("td", { class: "right" }, h("button", { class: "btn small danger", onclick: async () => {
-            if (await confirmDialog({ title: k.name + " widerrufen?", text: "Programme mit diesem Schlüssel kommen ab sofort nicht mehr rein.", ok: "Widerrufen", danger: true })) { await run("Widerrufen", () => api("DELETE", "/access/keys/" + k.id, {})); route(); }
-          } }, "Widerrufen")))))) : h("p", { class: "empty" }, "Noch keine Schlüssel.")));
+            if (await confirmDialog({ title: k.name + " widerrufen?", text: T("Programme mit diesem Schlüssel kommen ab sofort nicht mehr rein."), ok: T("Widerrufen"), danger: true })) { await run(T("Widerrufen"), () => api("DELETE", "/access/keys/" + k.id, {})); route(); }
+          } }, T("Widerrufen"))))))) : h("p", { class: "empty" }, T("Noch keine Schlüssel."))));
   }).catch(e => put(body, h("p", { class: "empty" }, e.message)));
 }
 
 // ---- command palette ---------------------------------------------------------------------------------
 
 function paletteItems() {
-  const items = PAGES.filter(p => !p.scope || can(p.scope)).map(p => ({ name: p.name, hint: "Seite", act: () => go(p.path) }));
+  const items = PAGES.filter(p => (!p.scope || can(p.scope)) && (!p.feature || S.session[p.feature])).map(p => ({ name: T(p.name), hint: T("Seite"), act: () => go(p.path) }));
   for (const s of S.overview?.servers || []) {
-    items.push({ name: "Konsole " + s.name, hint: "Server", act: () => go("/konsole/" + s.name) });
-    if (can("files")) items.push({ name: "Dateien " + s.name, hint: "Server", act: () => go("/dateien/" + s.name) });
+    items.push({ name: T("Konsole ") + s.name, hint: "Server", act: () => go("/konsole/" + s.name) });
+    if (can("files")) items.push({ name: T("Dateien ") + s.name, hint: "Server", act: () => go("/dateien/" + s.name) });
     if (can("power")) {
-      if (s.state === "stopped" || s.state === "crashed") items.push({ name: s.name + " starten", hint: "Aktion", act: () => power(s.name, "start") });
+      if (s.state === "stopped" || s.state === "crashed") items.push({ name: s.name + T(" starten"), hint: T("Aktion"), act: () => power(s.name, "start") });
       else {
-        items.push({ name: s.name + " neu starten", hint: "Aktion", act: () => power(s.name, "restart") });
-        items.push({ name: s.name + " stoppen", hint: "Aktion", act: () => power(s.name, "stop") });
-        items.push({ name: s.name + " hart beenden", hint: "Aktion", act: () => power(s.name, "kill") });
+        items.push({ name: s.name + T(" neu starten"), hint: T("Aktion"), act: () => power(s.name, "restart") });
+        items.push({ name: s.name + T(" stoppen"), hint: T("Aktion"), act: () => power(s.name, "stop") });
+        items.push({ name: s.name + T(" hart beenden"), hint: T("Aktion"), act: () => power(s.name, "kill") });
       }
     }
-    for (const p of s.players) if (can("players")) items.push({ name: "Kicken: " + p, hint: s.name, act: () => kick({ name: p, server: s.name }) });
+    for (const p of s.players) if (can("players")) items.push({ name: T("Kicken: ") + p, hint: s.name, act: () => kick({ name: p, server: s.name }) });
   }
-  if (can("pack")) items.push({ name: "Pack aktualisieren", hint: "Aktion", act: () => go("/pack") });
-  if (can("power")) items.push({ name: "Launcher neu laden", hint: "Aktion", act: async () => {
-    if (await confirmDialog({ title: "Launcher neu laden?", text: "Die Server laufen weiter, nur der Launcher startet frisch. Die Seite verbindet sich danach neu.", ok: "Neu laden" })) {
-      await run("Launcher lädt neu", () => api("POST", "/launcher/reload", {}));
+  if (can("pack")) items.push({ name: T("Pack aktualisieren"), hint: T("Aktion"), act: () => go("/pack") });
+  if (can("power")) items.push({ name: T("Launcher neu laden"), hint: T("Aktion"), act: async () => {
+    if (await confirmDialog({ title: T("Launcher neu laden?"), text: T("Die Server laufen weiter, nur der Launcher startet frisch. Die Seite verbindet sich danach neu."), ok: T("Neu laden") })) {
+      await run(T("Launcher lädt neu"), () => api("POST", "/launcher/reload", {}));
     }
   } });
-  items.push({ name: "Abmelden", hint: "Konto", act: async () => { await api("POST", "/auth/logout", {}); S.session.user = null; door("login", "Abgemeldet."); } });
+  items.push({ name: T("Abmelden"), hint: T("Konto"), act: async () => { await api("POST", "/auth/logout", {}); S.session.user = null; door("login", T("Abgemeldet.")); } });
   return items;
 }
 
 function openPalette() {
   if ($("dialog.palette")) return;
-  const input = h("input", { type: "text", placeholder: "Wohin, oder was tun?", "aria-label": "Suchen" });
+  const input = h("input", { type: "text", placeholder: T("Wohin, oder was tun?"), "aria-label": T("Suchen") });
   const list = h("ul", { role: "listbox" });
   const d = h("dialog", { class: "palette" }, input, list);
   let items = paletteItems(), shown = [], sel = 0;
@@ -1289,10 +1579,13 @@ async function start() {
   try {
     S.session = await api("GET", "/session");
   } catch (e) {
-    put($("#app"), h("div", { class: "door" }, h("div", { class: "door-card" }, crownMark(), h("h1", null, "Keine Verbindung"), h("p", null, e.message),
-      h("button", { class: "btn", onclick: () => location.reload() }, "Nochmal versuchen"))));
+    put($("#app"), h("div", { class: "door" }, h("div", { class: "door-card" }, crownMark(), h("h1", null, T("Keine Verbindung")), h("p", null, e.message),
+      h("button", { class: "btn", onclick: () => location.reload() }, T("Nochmal versuchen")))));
     return;
   }
+  LANG = S.session.language === "de" ? "de" : "en";
+  document.documentElement.lang = LANG;
+  if (/^#[0-9a-fA-F]{6}$/.test(S.session.accent || "")) document.documentElement.style.setProperty("--gold", S.session.accent);
   const path = location.pathname;
   if (!S.session.user) {
     if (path === "/setup" && S.session.setup) return door("setup");
@@ -1303,7 +1596,7 @@ async function start() {
   try {
     S.overview = await api("GET", "/overview");
   } catch (e) {
-    toast("Übersicht nicht geladen", e.message, true);
+    toast(T("Übersicht nicht geladen"), e.message, true);
     return;
   }
   shell();

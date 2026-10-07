@@ -14,12 +14,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Console lines typed in the panel go to the first server, except:
  *   stop                       stops every server and then the launcher, like before
  *   @name command              a command for another server
- *   kronwerke status           what every server is doing
- *   kronwerke start [name]     start a server (all without a name)
- *   kronwerke stop [name]      stop a server (all without a name); the launcher stays
- *   kronwerke restart [name]   restart a server (all without a name)
- *   kronwerke update           pack update: stop all, update, start again
- *   kronwerke reload           hand the servers to a freshly loaded launcher
+ *   launcher status            what every server is doing
+ *   launcher start [name]      start a server (all without a name)
+ *   launcher stop [name]       stop a server (all without a name); the launcher stays
+ *   launcher restart [name]    restart a server (all without a name)
+ *   launcher update            pack update: stop all, update, start again
+ *   launcher reload            hand the servers to a freshly loaded launcher
+ * ("kronwerke" works in place of "launcher", as it did before.)
  */
 public final class Main {
     public static final String VERSION = Main.class.getPackage() == null || Main.class.getPackage().getImplementationVersion() == null
@@ -36,10 +37,11 @@ public final class Main {
     public static String boot() throws Exception {
         PrintStream out = Boot.out();
         Path root = Boot.root();
-        Config cfg = Config.load(root.resolve("kronwerke/launcher.properties"));
+        Path home = Home.of(root);
+        Config cfg = Config.load(home.resolve("launcher.properties"));
         String java = cfg.get("java").isEmpty() ? ProcessHandle.current().info().command().orElse("java") : cfg.get("java");
         Fleet fleet = new Fleet(root, cfg, java, out);
-        fleet.note("Kronwerke launcher " + VERSION + ", java " + System.getProperty("java.version") + ", servers "
+        fleet.note("Launcher " + VERSION + ", java " + System.getProperty("java.version") + ", servers "
                 + String.join(", ", fleet.servers().stream().map(Server::name).toList()));
 
         Link link = null;
@@ -113,12 +115,13 @@ public final class Main {
             int sp = t.indexOf(' ');
             if (sp < 0) throw new IllegalArgumentException("@name command");
             Server s = fleet.server(t.substring(1, sp));
-            if (!s.send(t.substring(sp + 1))) s.note("Minecraft is not running; `kronwerke start " + s.name() + "` starts it");
+            if (!s.send(t.substring(sp + 1))) s.note("Not running; `launcher start " + s.name() + "` starts it");
             return;
         }
-        if (!t.startsWith("kronwerke ") && !t.equals("kronwerke")) {
+        boolean ours = t.equals("launcher") || t.startsWith("launcher ") || t.equals("kronwerke") || t.startsWith("kronwerke ");
+        if (!ours) {
             Server s = fleet.main();
-            if (!s.send(line)) s.note("Minecraft is not running; `kronwerke start` starts it");
+            if (!s.send(line)) s.note("Minecraft is not running; `launcher start` starts it");
             return;
         }
         String[] a = t.split("\\s+");
@@ -143,7 +146,7 @@ public final class Main {
                 }
             }, "update").start();
             case "reload" -> new Thread(fleet::reload, "reload").start();
-            default -> fleet.note("kronwerke status | start [name] | stop [name] | restart [name] | update | reload");
+            default -> fleet.note("launcher status | start [name] | stop [name] | restart [name] | update | reload");
         }
     }
 

@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * Every change made through the console, by anyone: who, from where, what, on which server,
- * and whether it worked. One JSON object per line in kronwerke/console/audit.jsonl.
+ * and whether it worked. One JSON object per line in the console folder's audit.jsonl.
  */
 final class Audit {
     private final Path file;
