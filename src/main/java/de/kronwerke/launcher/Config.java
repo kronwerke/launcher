@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -72,7 +73,7 @@ public final class Config {
             # CurseForge for the mods page goes through a proxy that holds a key, so the key never
             # sits in a launcher. An own key in console/curseforge.key is used directly instead.
             # Empty and no key: Modrinth only.
-            curseforge.proxy=https://api.kronwerke.com/curseforge
+            curseforge.proxy=https://kronwerke.com/api/curseforge
 
             # Where launcher updates come from: a GitHub repository with releases like this one's.
             update.repo=kronwerke/launcher
@@ -261,6 +262,21 @@ public final class Config {
         }
         out.sort(Comparator.comparingInt(ServerConfig::order).thenComparing(ServerConfig::name));
         return out;
+    }
+
+    /**
+     * Writes a new server's file: the template with every comment, then the given values.
+     * Refuses a name that exists or does not fit.
+     */
+    public static Config createServer(Path root, String name, Map<String, String> values) throws IOException {
+        if (!name.matches("[a-z0-9][a-z0-9_-]{0,23}")) throw new IllegalArgumentException("a name of lower case letters, digits, - and _, at most 24");
+        Path f = Home.of(root).resolve("servers").resolve(name + ".properties");
+        if (Files.exists(f)) throw new IllegalArgumentException("a server called " + name + " exists");
+        Files.createDirectories(f.getParent());
+        Files.writeString(f, serverTemplate("jar", "", "servers/" + name, "", "", "", "4G", "3", "false", "50", name), StandardCharsets.UTF_8);
+        Config c = load(f, serverTemplate("jar", "", "servers/" + name, "", "", "", "4G", "3", "false", "50", name));
+        for (var e : values.entrySet()) c.set(e.getKey(), e.getValue());
+        return c;
     }
 
     static String serverTemplate(String type, String jar, String dir, String port, String rcon, String voice, String memory,

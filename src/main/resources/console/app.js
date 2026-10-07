@@ -493,7 +493,66 @@ const EN = {
   "Installieren": "Install",
   "Nichts gefunden.": "Nothing found.",
   "Installiert": "Installed",
-  "Finden": "Find"
+  "Finden": "Find",
+  "Neuer Server": "New server",
+  "Zurück": "Back",
+  "Einen Moment...": "One moment...",
+  "Die Jar wird hochgeladen, sobald der Server angelegt ist. Sie muss sich mit java -jar starten lassen.": "The jar is uploaded once the server exists. It has to start with java -jar.",
+  "Jar auswählen": "Choose a jar",
+  "Version suchen": "Search versions",
+  "Auch Vorabversionen": "Pre-releases too",
+  "Server anlegen": "Create server",
+  "Kleinbuchstaben, Ziffern, - und _. Wird der Ordner servers/<name>.": "Lower case letters, digits, - and _. Becomes the folder servers/<name>.",
+  "Port": "Port",
+  "Ein freier Port, den dein Anbieter nach außen gibt (beim Panel eine Allocation). Belegt: ": "A free port your host opens to the outside (an allocation on a panel). Taken: ",
+  "Heap des Servers. Der Launcher prüft, ob alles zusammen passt.": "The server's heap. The launcher checks that everything fits together.",
+  "Ich akzeptiere die ": "I accept the ",
+  "Server angelegt": "Server created",
+  "Jar wird hochgeladen": "uploading the jar",
+  "startet gleich": "starting shortly",
+  "Jar hochgeladen": "Jar uploaded",
+  "Software für ": "Software for ",
+  "Willkommen": "Welcome",
+  "Los geht's": "Let's go",
+  "Mein Netzwerk": "My network",
+  "Ein paar Dinge, damit die Console nach dir aussieht. Alles lässt sich später ändern.": "A few things so the console looks like yours. Everything can be changed later.",
+  "Name, steht oben in der Console": "Name, shown at the top of the console",
+  "Sprache": "Language",
+  "Farbe": "Colour",
+  "Software, Start und Einstellungen dieses Servers.": "Software, start and settings of this server.",
+  "Software": "Software",
+  "Art": "Kind",
+  "Programm": "Program",
+  "Datei": "File",
+  "aus dem Pack": "from the pack",
+  "Software installieren oder wechseln": "Install or change software",
+  "Start": "Start",
+  "Ordner": "Folder",
+  "aus server.properties": "from server.properties",
+  "Heap für ": "Heap for ",
+  "Zum Beispiel 8G": "For example 8G",
+  "Ändern": "Change",
+  "JVM-Flags": "JVM flags",
+  "JVM-Flags für ": "JVM flags for ",
+  "Zusätzlich zu denen des Launchers": "In addition to the launcher's",
+  "Mit dem Launcher starten": "Start with the launcher",
+  "Nach einem Absturz neu starten": "Restart after a crash",
+  "Server entfernen": "Remove server",
+  "Stoppt ihn und nimmt ihn aus dem Launcher. Sein Ordner mit Welt und Dateien bleibt.": "Stops it and takes it out of the launcher. Its folder with world and files stays.",
+  "Tippe den Namen zur Bestätigung.": "Type the name to confirm.",
+  "Name stimmt nicht": "The name does not match",
+  "Version": "Version",
+  "Details": "Details",
+  "Einstellungen ": "Settings ",
+  "Plugins, schnell, die übliche Wahl": "Plugins, fast, the usual choice",
+  "Paper mit mehr Einstellungen": "Paper with more settings",
+  "Paper auf vielen Threads, für große Server": "Paper on many threads, for big servers",
+  "Leichte Mods": "Light mods",
+  "Große Mods und Modpacks": "Big mods and modpacks",
+  "Minecraft, wie Mojang es liefert": "Minecraft as Mojang ships it",
+  "Ein Proxy vor mehreren Servern": "A proxy in front of several servers",
+  "Jede Jar, die du hochlädst": "Any jar you upload",
+  "Eigene Jar": "Custom jar"
   };
 function T(s) {
   if (s == null) return s;
@@ -718,6 +777,7 @@ const PAGES = [
   { path: "/pack", name: "Mods und Plugins", key: "m", draw: pagePack },
   { path: "/dateien", name: "Dateien", key: "d", draw: pageFiles, scope: "files" },
   { path: "/ressourcen", name: "Ressourcen", key: "r", draw: pageResources },
+  { path: "/server", name: "Server", key: "x", draw: pageServer, hidden: true },
   { path: "/verlauf", name: "Verlauf", key: "v", draw: pageHistory },
   { path: "/zugang", name: "Zugang", key: "z", draw: pageAccess },
 ];
@@ -732,7 +792,7 @@ function shell() {
   app.className = "";
   app.removeAttribute("aria-busy");
   const nav = h("nav", { class: "pages", "aria-label": T("Bereiche") },
-    PAGES.filter(p => (!p.scope || can(p.scope)) && (!p.feature || S.session[p.feature])).map(p => h("a", { href: p.path, "data-link": true }, T(p.name), h("kbd", { title: T("g dann ") + p.key }, "g " + p.key))));
+    PAGES.filter(p => !p.hidden && (!p.scope || can(p.scope)) && (!p.feature || S.session[p.feature])).map(p => h("a", { href: p.path, "data-link": true }, T(p.name), h("kbd", { title: T("g dann ") + p.key }, "g " + p.key))));
   const rail = h("aside", { class: "rail" },
     h("a", { class: "mark", href: "/", "data-link": true }, crownMark(), h("b", null, S.session.title.replace(/ Console$/, "") + " ", h("span", null, "Console"))),
     h("div", { class: "fleet", id: "fleet" }),
@@ -973,7 +1033,8 @@ function pageOverview(main) {
   const cards = h("div", { class: "stack", id: "pulses" });
   const side = h("div", { class: "stack" });
   main.append(header(T("Übersicht"), null,
-    can("pack") ? h("a", { class: "btn", href: "/pack", "data-link": true }, "Pack " + (o.pack.version || "?")) : null),
+    o.pack.version ? h("a", { class: "btn", href: "/pack", "data-link": true }, "Pack " + o.pack.version) : null,
+    can("config") && can("power") ? h("button", { class: "btn primary", onclick: newServerWizard }, T("Neuer Server")) : null),
     h("div", { class: "grid-2" }, cards, side));
 
   const drawCards = () => {
@@ -984,7 +1045,7 @@ function pageOverview(main) {
         h("div", { class: "pulse-top" },
           h("div", null,
             h("div", { class: "pulse-name" },
-              h("h2", null, h("a", { href: "/konsole/" + s.name, "data-link": true }, s.name)),
+              h("h2", null, h("a", { href: "/server/" + s.name, "data-link": true }, s.name)),
               h("span", { class: "state", "data-s": s.state }, (T(STATE_DE[s.state]) || s.state) + T(" seit ") + fmt.since(s.since))),
             h("div", { class: "pulse-meta" }, [s.detail, s.port ? "Port " + s.port : null, s.role && s.role !== s.name ? s.role : null].filter(Boolean).join(", "))),
           h("div", { class: "mspt", "data-health": s.state === "running" ? health(m) : "" },
@@ -1136,6 +1197,7 @@ function pageConsole(main, rest) {
   on("line", d => {
     if (which !== "alle" && d.server !== which) return;
     if (!visible(d.text)) return;
+    stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     log.append(row(d.text, d.server));
     while (log.childElementCount > 4000) log.firstElementChild.remove();
     if (stick) log.scrollTop = log.scrollHeight;
@@ -1824,6 +1886,220 @@ function pageAccess(main) {
   }).catch(e => put(body, h("p", { class: "empty" }, e.message)));
 }
 
+// ---- wizards ----------------------------------------------------------------------------------------
+
+/**
+ * A dialog in steps. Each step draws itself into the body and says whether "Next" may be
+ * pressed; the last step's button runs finish.
+ */
+function wizard({ title, steps, finish, finishLabel }) {
+  let i = 0;
+  const state = {};
+  const body = h("div", { class: "wiz-body" });
+  const dots = h("ol", { class: "wiz-steps" });
+  const back = h("button", { class: "btn quiet", type: "button" }, T("Zurück"));
+  const next = h("button", { class: "btn primary", type: "button" });
+  const err = h("p", { class: "error", role: "alert" });
+  const d = h("dialog", { class: "wizard" }, h("div", { class: "wiz" },
+    h("header", null, h("h2", null, title), h("button", { class: "btn quiet small", type: "button", "aria-label": T("Schließen"), onclick: () => d.close() }, "×")),
+    dots, body, err, h("div", { class: "actions wiz-foot" }, back, h("span", { style: { flex: "1" } }), next)));
+  const draw = () => {
+    err.textContent = "";
+    put(dots, steps.map((s, k) => h("li", { "aria-current": k === i ? "step" : null, class: k < i ? "done" : "" }, T(s.name))));
+    put(body);
+    steps[i].draw(body, state, () => refresh());
+    back.hidden = i === 0;
+    next.textContent = i === steps.length - 1 ? (finishLabel || T("Fertig")) : T("Weiter");
+    refresh();
+  };
+  const refresh = () => { next.disabled = steps[i].ready && !steps[i].ready(state); };
+  back.addEventListener("click", () => { i = Math.max(0, i - 1); draw(); });
+  next.addEventListener("click", async () => {
+    if (i < steps.length - 1) { i++; draw(); return; }
+    next.disabled = true;
+    next.textContent = T("Einen Moment...");
+    try { await finish(state); d.close(); } catch (e) { err.textContent = e.message; next.disabled = false; next.textContent = finishLabel || T("Fertig"); }
+  });
+  d.addEventListener("close", () => d.remove());
+  document.body.append(d);
+  d.showModal();
+  draw();
+  return d;
+}
+
+const SOFTWARE_ICON = { paper: "P", purpur: "Pu", folia: "Fo", fabric: "Fa", neoforge: "N", vanilla: "V", velocity: "Ve", custom: "J" };
+
+/** Software and version, shared by "new server" and "change software". */
+function softwareSteps() {
+  return [
+    { name: "Software", ready: s => !!s.kind, draw: (b, s, refresh) => {
+      api("GET", "/software").then(kinds => put(b, h("div", { class: "soft-grid" }, kinds.map(k => h("button", {
+        type: "button", class: "soft" + (s.kind === k.id ? " on" : ""), "aria-pressed": String(s.kind === k.id),
+        onclick: e => { s.kind = k.id; s.version = ""; $$(".soft", b).forEach(x => { x.classList.toggle("on", x === e.currentTarget); x.setAttribute("aria-pressed", String(x === e.currentTarget)); }); refresh(); },
+      }, h("span", { class: "soft-icon" }, SOFTWARE_ICON[k.id] || "?"), h("b", null, T(k.name)), h("span", { class: "dim" }, T(k.about)))))));
+    } },
+    { name: "Version", ready: s => s.kind === "custom" ? !!s.file : !!s.version, draw: (b, s, refresh) => {
+      if (s.kind === "custom") {
+        const f = h("input", { type: "file", accept: ".jar" });
+        f.addEventListener("change", () => { s.file = f.files[0]; refresh(); });
+        put(b, h("p", { class: "muted" }, T("Die Jar wird hochgeladen, sobald der Server angelegt ist. Sie muss sich mit java -jar starten lassen.")), h("label", { class: "drop" }, f, T("Jar auswählen")));
+        return;
+      }
+      const all = h("input", { type: "checkbox" });
+      const search = h("input", { type: "search", placeholder: T("Version suchen") });
+      const list = h("div", { class: "ver-list", role: "listbox" });
+      let versions = [];
+      const show = () => put(list, versions.filter(v => !search.value || v.includes(search.value)).slice(0, 80).map(v => h("button", {
+        type: "button", role: "option", "aria-selected": String(v === s.version), class: "ver" + (v === s.version ? " on" : ""),
+        onclick: () => { s.version = v; show(); refresh(); },
+      }, v)));
+      const load = () => api("GET", "/software/" + s.kind + "/versions" + (all.checked ? "?all=1" : "")).then(v => { versions = v; if (!s.version && v.length) s.version = v[0]; show(); refresh(); })
+        .catch(e => put(list, h("p", { class: "error" }, e.message)));
+      search.addEventListener("input", show);
+      all.addEventListener("change", load);
+      put(b, h("div", { class: "actions" }, search, h("label", { class: "check" }, all, T("Auch Vorabversionen"))), list);
+      load();
+    } },
+  ];
+}
+
+function newServerWizard() {
+  const used = new Set(S.overview.servers.map(s => s.port).filter(Boolean));
+  wizard({
+    title: T("Neuer Server"), finishLabel: T("Server anlegen"),
+    steps: [...softwareSteps(), {
+      name: "Details", ready: s => /^[a-z0-9][a-z0-9_-]{0,23}$/.test(s.name || "") && /^[0-9]{2,5}$/.test(s.port || "") && (s.kind === "velocity" || s.kind === "custom" || s.eula),
+      draw: (b, s, refresh) => {
+        s.memory ||= s.kind === "neoforge" ? "8G" : "4G";
+        s.share ||= 3;
+        const field = (label, input, hint) => h("label", { class: "field" }, h("span", null, label), input, hint ? h("small", { class: "dim" }, hint) : null);
+        const name = h("input", { type: "text", value: s.name || "", placeholder: "lobby", maxlength: 24 });
+        const port = h("input", { type: "text", value: s.port || "", placeholder: "25566", inputmode: "numeric" });
+        const mem = h("select", null, ["2G", "4G", "6G", "8G", "12G", "16G", "24G"].map(m => h("option", { value: m, selected: m === s.memory || null }, m)));
+        const eula = h("input", { type: "checkbox", checked: s.eula || null });
+        name.addEventListener("input", () => { s.name = name.value.trim().toLowerCase(); refresh(); });
+        port.addEventListener("input", () => { s.port = port.value.trim(); refresh(); });
+        mem.addEventListener("change", () => { s.memory = mem.value; });
+        eula.addEventListener("change", () => { s.eula = eula.checked; refresh(); });
+        put(b, h("div", { class: "form-grid" },
+          field(T("Name"), name, T("Kleinbuchstaben, Ziffern, - und _. Wird der Ordner servers/<name>.")),
+          field(T("Port"), port, T("Ein freier Port, den dein Anbieter nach außen gibt (beim Panel eine Allocation). Belegt: ") + ([...used].join(", ") || "-")),
+          field(T("Arbeitsspeicher"), mem, T("Heap des Servers. Der Launcher prüft, ob alles zusammen passt."))),
+          s.kind === "velocity" || s.kind === "custom" ? null : h("label", { class: "check eula" }, eula, h("span", null, T("Ich akzeptiere die "), h("a", { href: "https://aka.ms/MinecraftEULA", target: "_blank", rel: "noopener" }, "Minecraft EULA"), ".")));
+      },
+    }],
+    finish: async s => {
+      await api("POST", "/servers", { name: s.name, kind: s.kind, version: s.version, port: s.port, memory: s.memory, share: s.share, eula: !!s.eula, start: true });
+      toast(T("Server angelegt"), s.name + ": " + (s.kind === "custom" ? T("Jar wird hochgeladen") : T("startet gleich")));
+      await waitForServer(s.name);
+      if (s.kind === "custom" && s.file) await uploadJar(s.name, s.file);
+      go("/konsole/" + s.name);
+    },
+  });
+}
+
+/** After a reload the new server appears; this waits for it (the stream reconnects by itself). */
+async function waitForServer(name) {
+  for (let k = 0; k < 30; k++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const o = await api("GET", "/overview");
+      if (o.servers.some(s => s.name === name)) { S.overview = o; drawFleet(); return; }
+    } catch {}
+  }
+}
+
+async function uploadJar(server, file) {
+  const res = await fetch("/api/servers/" + server + "/jar?name=" + encodeURIComponent(file.name.replace(/[^A-Za-z0-9_.+-]/g, "-")), {
+    method: "PUT", body: file, headers: { "X-Kw-Csrf": S.session.csrf, "Content-Type": "application/octet-stream" }, credentials: "same-origin",
+  });
+  const j = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
+  if (!j.ok) throw new Error(j.error);
+  toast(T("Jar hochgeladen"), file.name);
+}
+
+function softwareWizard(server) {
+  wizard({
+    title: T("Software für ") + server, finishLabel: T("Installieren"),
+    steps: softwareSteps(),
+    finish: async s => {
+      if (s.kind === "custom") {
+        await uploadJar(server, s.file);
+      } else {
+        await api("POST", "/servers/" + server + "/software", { kind: s.kind, version: s.version });
+        toast(T("Installiert"), s.kind + " " + s.version);
+      }
+      refreshOverview();
+      if (S.page?.path === "/server") route();
+    },
+  });
+}
+
+function welcomeWizard() {
+  wizard({
+    title: T("Willkommen"), finishLabel: T("Los geht's"),
+    steps: [{
+      name: "Name", ready: s => (s.name || "").trim().length > 0, draw: (b, s, refresh) => {
+        const name = h("input", { type: "text", value: s.name || "", placeholder: T("Mein Netzwerk"), maxlength: 40 });
+        const lang = h("div", { class: "seg" }, [["de", "Deutsch"], ["en", "English"]].map(([k, n]) => h("button", { type: "button", "aria-pressed": String((s.language || LANG) === k), onclick: e => { s.language = k; $$("button", lang).forEach(x => x.setAttribute("aria-pressed", String(x === e.currentTarget))); } }, n)));
+        const colors = ["#e5b451", "#8bb6dc", "#bb98f4", "#7fd0c8", "#f06579", "#8fd18b"];
+        const sw = h("div", { class: "swatches" }, colors.map(c => h("button", { type: "button", class: "swatch", style: { "--c": c }, "aria-label": c, "aria-pressed": String((s.accent || S.session.accent) === c), onclick: e => { s.accent = c; document.documentElement.style.setProperty("--gold", c); $$(".swatch", sw).forEach(x => x.setAttribute("aria-pressed", String(x === e.currentTarget))); } })));
+        name.addEventListener("input", () => { s.name = name.value; refresh(); });
+        put(b, h("p", { class: "muted" }, T("Ein paar Dinge, damit die Console nach dir aussieht. Alles lässt sich später ändern.")),
+          h("label", { class: "field" }, h("span", null, T("Name, steht oben in der Console")), name),
+          h("div", { class: "field" }, h("span", null, T("Sprache")), lang),
+          h("div", { class: "field" }, h("span", null, T("Farbe")), sw));
+        setTimeout(() => name.focus(), 50);
+      },
+    }],
+    finish: async s => {
+      await api("POST", "/launcher/settings", { name: s.name.trim(), language: s.language || LANG, accent: s.accent || S.session.accent });
+      S.session = await api("GET", "/session");
+      start();
+      const first = S.overview?.servers?.[0];
+      if (first && !first.wanted && first.state === "stopped") setTimeout(() => softwareWizard(first.name), 800);
+    },
+  });
+}
+
+// ---- one server ------------------------------------------------------------------------------------
+
+function pageServer(main, rest) {
+  const s = S.overview.servers.find(x => x.name === rest) || S.overview.servers[0];
+  const body = h("div", { class: "stack" });
+  main.append(header(s.name, T("Software, Start und Einstellungen dieses Servers."),
+    h("a", { class: "btn", href: "/konsole/" + s.name, "data-link": true }, T("Konsole")), ...powerButtons(s)), body);
+  const row = (label, value, action) => h("div", { class: "kv" }, h("span", { class: "muted" }, label), h("b", null, value || "-"), action || h("span"));
+  const set = (key, value, label) => run(label, () => api("POST", "/servers/" + s.name + "/config", { key, value: String(value) })).then(refreshOverview);
+  put(body,
+    h("section", { class: "panel" }, h("header", null, h("h2", null, T("Software"))), h("div", { class: "body stack" },
+      row(T("Art"), s.type === "neoforge" ? "NeoForge" : s.type === "command" ? T("Programm") : "Jar"),
+      row(T("Datei"), s.jar || (s.type === "neoforge" ? "NeoForge " + (s.neoforge || T("aus dem Pack")) : "")),
+      row("Minecraft", s.minecraft),
+      can("config") && can("power") && s.type !== "command" ? h("div", { class: "actions" }, h("button", { class: "btn", onclick: () => softwareWizard(s.name) }, T("Software installieren oder wechseln"))) : null)),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, T("Start"))), h("div", { class: "body stack" },
+      row(T("Ordner"), s.dir || "."),
+      row(T("Port"), s.port || T("aus server.properties")),
+      row(T("Arbeitsspeicher"), s.memory, can("config") ? h("button", { class: "btn small", onclick: async () => {
+        const v = await confirmDialog({ title: T("Heap für ") + s.name, ok: T("Speichern"), input: { label: T("Zum Beispiel 8G"), value: s.memory } });
+        if (v) set("memory", v.trim().toUpperCase(), T("Gespeichert"));
+      } }, T("Ändern")) : null),
+      row(T("JVM-Flags"), s.jvmArgs, can("config") ? h("button", { class: "btn small", onclick: async () => {
+        const v = await confirmDialog({ title: T("JVM-Flags für ") + s.name, ok: T("Speichern"), input: { label: T("Zusätzlich zu denen des Launchers"), value: s.jvmArgs || "" } });
+        if (v != null) set("jvm.args", v.trim(), T("Gespeichert"));
+      } }, T("Ändern")) : null),
+      h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: s.autostart || null, disabled: !can("config") || null, onchange: e => set("autostart", e.target.checked, T("Gespeichert")) }), T("Mit dem Launcher starten")),
+      h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: s.restartOnCrash || null, disabled: !can("config") || null, onchange: e => set("restart.on.crash", e.target.checked, T("Gespeichert")) }), T("Nach einem Absturz neu starten")))),
+    s.name !== S.overview.servers[0].name && can("config") && can("power") ? h("section", { class: "panel danger-zone" }, h("header", null, h("h2", null, T("Server entfernen"))), h("div", { class: "body actions" },
+      h("p", { class: "muted", style: { margin: "0", flex: "1" } }, T("Stoppt ihn und nimmt ihn aus dem Launcher. Sein Ordner mit Welt und Dateien bleibt.")),
+      h("button", { class: "btn danger", onclick: async () => {
+        const n = await confirmDialog({ title: s.name + T(" entfernen?"), text: T("Tippe den Namen zur Bestätigung."), ok: T("Entfernen"), danger: true, input: { label: T("Name"), required: true } });
+        if (n !== s.name) return n && toast(T("Name stimmt nicht"), "", true);
+        await run(T("Entfernt"), () => api("DELETE", "/servers/" + s.name, {}));
+        setTimeout(() => go("/"), 2500);
+      } }, T("Entfernen")))) : null);
+}
+
 // ---- command palette ---------------------------------------------------------------------------------
 
 function paletteItems() {
@@ -1924,6 +2200,7 @@ async function start() {
   shell();
   route();
   startStream();
+  if (!S.session.named && S.session.user.role === "owner" && !$("dialog.wizard")) setTimeout(welcomeWizard, 400);
 }
 
 start();

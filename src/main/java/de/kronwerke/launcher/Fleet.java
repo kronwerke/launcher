@@ -327,14 +327,15 @@ public final class Fleet {
                 if (version.isEmpty()) throw new IOException("no NeoForge version: set pack.url, or neoforge in the server's file");
                 if (info == null) info = new Pack.Info("", "", "", version);
                 else if (!version.equals(info.neoforge())) info = new Pack.Info(info.name(), info.version(), info.minecraft(), version);
-                if (!neoforgeChecked.contains(version)) {
+                if (!neoforgeChecked.contains(version + "|" + s.dir())) {
+                    if (!s.dir().equals(root)) link(s);
                     try {
-                        pack.ensureNeoForge(version);
+                        pack.ensureNeoForge(version, s.dir());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         throw new IOException("interrupted");
                     }
-                    neoforgeChecked.add(version);
+                    neoforgeChecked.add(version + "|" + s.dir());
                 }
             }
         }
@@ -471,7 +472,7 @@ public final class Fleet {
             cmd.add(jar);
         } else {
             if (Files.exists(s.dir().resolve("user_jvm_args.txt"))) cmd.add("@user_jvm_args.txt");
-            cmd.add("@" + root.relativize(pack.argsFile(info.neoforge())));
+            cmd.add("@" + s.dir().relativize(Pack.argsFile(s.dir(), info.neoforge())));
         }
         String args = sc.get("args").isEmpty() ? "nogui" : sc.get("args");
         for (String a : args.split("\\s+")) if (!a.isBlank() && !a.equals("-")) cmd.add(a);

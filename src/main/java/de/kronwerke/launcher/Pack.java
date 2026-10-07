@@ -100,24 +100,39 @@ public final class Pack {
 
     /** The argument file NeoForge's installer writes for a version. */
     public Path argsFile(String neoforge) {
+        return argsFile(root, neoforge);
+    }
+
+    /** The argument file inside a server's folder. */
+    public static Path argsFile(Path dir, String neoforge) {
         String os = System.getProperty("os.name", "").toLowerCase().contains("win") ? "win_args.txt" : "unix_args.txt";
-        return root.resolve("libraries/net/neoforged/neoforge/" + neoforge + "/" + os);
+        return dir.resolve("libraries/net/neoforged/neoforge/" + neoforge + "/" + os);
     }
 
     /** Installs the NeoForge server if the version is not there yet. */
     public void ensureNeoForge(String neoforge) throws IOException, InterruptedException {
+        ensureNeoForge(neoforge, root);
+    }
+
+    /** Installs the NeoForge server into a server's folder if that version is not there yet. */
+    public void ensureNeoForge(String neoforge, Path dir) throws IOException, InterruptedException {
         if (neoforge.isEmpty()) throw new IOException("the pack names no NeoForge version");
-        if (Files.exists(argsFile(neoforge))) return;
-        Path installer = root.resolve("neoforge-" + neoforge + "-installer.jar");
-        log.accept("Installing NeoForge " + neoforge);
+        if (Files.exists(argsFile(dir, neoforge))) return;
+        Files.createDirectories(dir);
+        Path installer = dir.resolve("neoforge-" + neoforge + "-installer.jar");
+        log.accept("Installing NeoForge " + neoforge + " in " + root.relativize(dir.toAbsolutePath().normalize()));
         download(NEOFORGE_MAVEN + neoforge + "/neoforge-" + neoforge + "-installer.jar", installer);
-        int code = run(List.of(java, "-jar", installer.toString(), "--installServer", root.toString()));
+        int code = run(List.of(java, "-jar", installer.toString(), "--installServer", dir.toString()), dir);
         Files.deleteIfExists(installer);
-        if (code != 0 || !Files.exists(argsFile(neoforge))) throw new IOException("the NeoForge installer failed (" + code + ")");
+        if (code != 0 || !Files.exists(argsFile(dir, neoforge))) throw new IOException("the NeoForge installer failed (" + code + ")");
     }
 
     private int run(List<String> cmd) throws IOException, InterruptedException {
-        Process p = new ProcessBuilder(new ArrayList<>(cmd)).directory(root.toFile()).redirectErrorStream(true).start();
+        return run(cmd, root);
+    }
+
+    private int run(List<String> cmd, Path dir) throws IOException, InterruptedException {
+        Process p = new ProcessBuilder(new ArrayList<>(cmd)).directory(dir.toFile()).redirectErrorStream(true).start();
         p.getOutputStream().close();
         try (var r = p.inputReader(StandardCharsets.UTF_8)) {
             String line;

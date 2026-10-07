@@ -54,6 +54,7 @@ final class Api {
     private volatile long remoteAt;
     private final long started = Instant.now().getEpochSecond();
     private final Mods mods;
+    private final Software software = new Software();
 
     Api(Web web) {
         this.web = web;
@@ -146,6 +147,20 @@ final class Api {
                     server(r, fleet.server(p[1]), p[2], p.length > 3 ? p[3] : "");
                     return;
                 }
+                if (p.length == 1 && m.equals("POST")) {
+                    createServer(r);
+                    return;
+                }
+                if (p.length == 2 && m.equals("DELETE")) {
+                    removeServer(r, fleet.server(p[1]));
+                    return;
+                }
+            }
+            case "software" -> {
+                need(r, "read");
+                if (p.length == 1) r.ok(Software.kinds());
+                else r.ok(software.versions(p[1], r.q("all", "").equals("1")));
+                return;
             }
             case "container" -> {
                 need(r, "read");
@@ -247,7 +262,8 @@ final class Api {
         String accent = web.cfg.get("console.accent");
         Map<String, Object> s = Json.map("host", web.host, "setup", access.setupCode() != null, "launcher", Main.VERSION,
                 "title", web.title(), "language", web.cfg.get("console.language").equals("de") ? "de" : "en",
-                "accent", accent.matches("#[0-9a-fA-F]{6}") ? accent : "#e5b451", "season", web.season());
+                "accent", accent.matches("#[0-9a-fA-F]{6}") ? accent : "#e5b451", "season", web.season(),
+                "named", !web.cfg.get("name").isEmpty(), "panelPort", System.getenv("SERVER_PORT") == null ? "" : System.getenv("SERVER_PORT"));
         if (r.who != null) {
             s.put("user", Json.map("id", r.who.id(), "name", r.who.name(), "role", r.who.role(), "kind", r.who.kind()));
             s.put("scopes", new ArrayList<>(r.who.scopes()));
@@ -342,7 +358,7 @@ final class Api {
                 "since", s.since().toString(), "pid", s.pid(), "starts", s.starts(), "wanted", s.wanted(),
                 "role", c.get("role"), "port", c.get("port"), "memory", c.get("memory"), "share", c.number("cpu.share", 1),
                 "autostart", c.flag("autostart"), "restartOnCrash", c.flag("restart.on.crash"), "jvmArgs", c.get("jvm.args"),
-                "dir", c.get("dir"), "type", s.type(), "color", c.get("color").matches("#[0-9a-fA-F]{6}") ? c.get("color") : "", "last", last == null ? null : sampleJson(last), "players", s.metrics().players(),
+                "dir", c.get("dir"), "type", s.type(), "jar", c.get("jar"), "neoforge", c.get("neoforge"), "minecraft", c.get("minecraft"), "color", c.get("color").matches("#[0-9a-fA-F]{6}") ? c.get("color") : "", "last", last == null ? null : sampleJson(last), "players", s.metrics().players(),
                 "dimensions", s.metrics().dimensions());
     }
 
@@ -545,6 +561,48 @@ final class Api {
                 need(r, "read");
                 r.ok(crashes(s));
             }
+            case "software" -> {
+                post(m);
+                Map<String, Object> b = r.body();
+                String kind = Json.str(b, "kind", ""), version = Json.str(b, "version", "");
+                act(r, "config", "software", s.name(), kind + " " + version, () -> {
+                    need(r, "power");
+                    boolean was = s.wanted();
+                    s.stop();
+                    Map<String, String> set = software.install(kind, version, s.dir());
+                    for (var e : set.entrySet()) s.config().set(e.getKey(), e.getValue());
+                    if (was) s.start();
+                    return Json.map("installed", kind + " " + version, "started", was);
+                });
+            }
+            case "jar" -> {
+                if (!m.equals("PUT")) throw new Web.Http(405, "PUT");
+                String name = r.q("name", "server.jar");
+                if (!name.matches("[A-Za-z0-9_.+-]{1,80}\\.jar")) throw new IllegalArgumentException("a jar file name");
+                act(r, "config", "upload jar", s.name(), name, () -> {
+                    need(r, "files");
+                    Path tmp = s.dir().resolve(name + ".part");
+                    Files.createDirectories(s.dir());
+                    long size;
+                    try (var in = r.raw(); var out = Files.newOutputStream(tmp)) {
+                        size = in.transferTo(out);
+                    }
+                    if (size > 512L << 20) {
+                        Files.deleteIfExists(tmp);
+                        throw new IllegalArgumentException("larger than 512 MB");
+                    }
+                    try (var z = new java.util.zip.ZipFile(tmp.toFile())) {
+                        if (z.getEntry("META-INF/MANIFEST.MF") == null) throw new IllegalArgumentException("not a runnable jar");
+                    } catch (IOException e) {
+                        Files.deleteIfExists(tmp);
+                        throw new IllegalArgumentException("not a jar");
+                    }
+                    Files.move(tmp, s.dir().resolve(name), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    s.config().set("type", "jar");
+                    s.config().set("jar", name);
+                    return Json.map("jar", name, "size", size);
+                });
+            }
             case "mods" -> {
                 Mods.Target target = Mods.target(s, fleet.pack().local());
                 if (sub.equals("search")) {
@@ -621,6 +679,84 @@ final class Api {
         } catch (IOException | RuntimeException e) {
             return "";
         }
+    }
+
+    // ---- new servers ----
+
+    /** Ports the servers and the console already use. */
+    private java.util.Set<String> usedPorts() {
+        java.util.Set<String> used = new java.util.HashSet<>();
+        used.add(web.cfg.get("console.port"));
+        for (Server s : fleet.servers()) {
+            for (String k : List.of("port", "rcon.port", "voice.port")) used.add(s.config().get(k));
+            if (s.config().get("port").isEmpty() && s.minecraft()) {
+                try {
+                    for (String l : Files.readAllLines(s.properties(), StandardCharsets.ISO_8859_1)) {
+                        if (l.startsWith("server-port=")) used.add(l.substring(12).trim());
+                        if (l.startsWith("rcon.port=")) used.add(l.substring(10).trim());
+                    }
+                } catch (IOException ignored) {
+                    // no file yet
+                }
+            }
+        }
+        used.remove("");
+        return used;
+    }
+
+    private void createServer(Web.Req r) throws Exception {
+        Map<String, Object> b = r.body();
+        String name = Json.str(b, "name", "").trim().toLowerCase();
+        String kind = Json.str(b, "kind", ""), version = Json.str(b, "version", "");
+        String port = Json.str(b, "port", "").trim();
+        Software.kind(kind);
+        if (!port.matches("[0-9]{2,5}")) throw new IllegalArgumentException("a port number");
+        if (usedPorts().contains(port)) throw new IllegalArgumentException("port " + port + " is taken");
+        act(r, "config", "new server", name, kind + " " + version + " on " + port, () -> {
+            need(r, "power");
+            int rcon = 25575;
+            while (usedPorts().contains(Integer.toString(rcon))) rcon++;
+            int order = 10;
+            for (Server s : fleet.servers()) order = Math.max(order, s.config().number("order", 50) + 10);
+            Map<String, String> v = new java.util.LinkedHashMap<>();
+            v.put("port", port);
+            v.put("rcon.port", Integer.toString(rcon));
+            v.put("memory", Json.str(b, "memory", "4G"));
+            v.put("cpu.share", Long.toString(Math.max(1, Json.num(b, "share", 3))));
+            v.put("order", Integer.toString(order));
+            v.put("share", "-");
+            Path dir = fleet.root().resolve("servers").resolve(name);
+            var cfg = de.kronwerke.launcher.Config.createServer(fleet.root(), name, v);
+            if (!kind.equals("custom")) {
+                for (var e : software.install(kind, version, dir).entrySet()) cfg.set(e.getKey(), e.getValue());
+            }
+            if (Json.bool(b, "eula", false)) {
+                Files.createDirectories(dir);
+                Files.writeString(dir.resolve("eula.txt"), "# accepted in the console\neula=true\n");
+            }
+            cfg.set("autostart", Boolean.toString(Json.bool(b, "start", true) && !kind.equals("custom")));
+            fleet.submit(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                    // reload anyway
+                }
+                fleet.reload();
+            });
+            return Json.map("name", name, "reload", true);
+        });
+    }
+
+    private void removeServer(Web.Req r, Server s) throws Exception {
+        if (s == fleet.main()) throw new IllegalArgumentException("the first server stays");
+        act(r, "config", "remove server", s.name(), "", () -> {
+            need(r, "power");
+            s.stop();
+            Path f = fleet.home().resolve("servers").resolve(s.name() + ".properties");
+            Files.move(f, f.resolveSibling(s.name() + ".properties.removed"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            fleet.submit(fleet::reload);
+            return "removed; its folder stays";
+        });
     }
 
     // ---- pack ----
@@ -733,6 +869,24 @@ final class Api {
                     }
                     if (sha.isEmpty()) throw new IOException("the release has no checksum for kronwerke-launcher.jar");
                     return Updater.install(fleet, base + "kronwerke-launcher.jar", sha, true);
+                });
+            }
+            case "settings" -> {
+                act(r, "config", "settings", null, "", () -> {
+                    String name = Json.str(b, "name", null), lang = Json.str(b, "language", null), accent = Json.str(b, "accent", null);
+                    if (name != null) {
+                        if (name.length() > 40 || name.contains("\n")) throw new IllegalArgumentException("a name of up to 40 characters");
+                        web.cfg.set("name", name.trim());
+                    }
+                    if (lang != null) {
+                        if (!lang.equals("en") && !lang.equals("de")) throw new IllegalArgumentException("en or de");
+                        web.cfg.set("console.language", lang);
+                    }
+                    if (accent != null) {
+                        if (!accent.matches("#[0-9a-fA-F]{6}")) throw new IllegalArgumentException("a colour like #e5b451");
+                        web.cfg.set("console.accent", accent);
+                    }
+                    return "saved";
                 });
             }
             case "config" -> {

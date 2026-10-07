@@ -335,6 +335,11 @@ public final class Web {
             return body;
         }
 
+        /** The request body as it comes, for uploads too big for JSON. */
+        InputStream raw() {
+            return ex.getRequestBody();
+        }
+
         void header(String k, String v) {
             ex.getResponseHeaders().set(k, v);
         }
