@@ -92,6 +92,8 @@ The key stays in `launcher/link.key`; the controller keeps only its hash.
 - **Pack update:** push to the pack repository, then "Update pack" in the console (or `launcher update`). Every server stops, the pack updates, they start again. A fresh container also updates first.
 - **Crash:** the server starts again after 15 seconds. After three crashes in ten minutes it waits: read the console or the crash report, fix, start it.
 - **Maintenance:** stop a server in the console; the launcher and the others stay up. The panel's stop ends everything.
+- **By the clock:** the console's Automation page plans restarts with warnings to the players, backups, commands and messages, and sends alerts (crash, a server that gave up, tick time that stays high, failed backups) to a Discord webhook or any https URL.
+- **Backups:** on a server's page, or by the clock. The world as a zip in `launcher/backups/<name>`; a restore moves the current world aside instead of deleting it.
 - **Launcher update:** in the console, or `POST /api/launcher/update {"version": "v0.3.0"}`. The new version takes over at once and the servers keep running. Releases come from `update.repo`.
 
 ## Settings
@@ -110,6 +112,7 @@ The key stays in `launcher/link.key`; the controller keeps only its hash.
 | `bus.port` | empty | A loopback port mods of a network connect to (Kronwerke Core does); see [BUS.md](BUS.md) |
 | `cpu.pin`, `cpu.balance` | `false` | CPU shares as hard limits, and moving them by load |
 | `container.memory` | empty | GB the servers may use together; empty reads the container's limit |
+| `timezone` | empty | Time zone of scheduled tasks and backup names, like `Europe/Berlin`; empty is the container's |
 
 Per server, in `launcher/servers/<name>.properties`:
 
@@ -126,6 +129,8 @@ Per server, in `launcher/servers/<name>.properties`:
 | `autostart`, `restart.on.crash`, `order` | Starting with the launcher, after crashes, in which order |
 | `role` | Passed to the server as `-Dlauncher.role` |
 | `color`, `label` | Its colour in the console and in front of its chat on the others; its name there |
+| `maintenance`, `maintenance.message` | Only operators may join; everyone else is sent away with the message |
+| `backup.keep` | How many world backups stay in `launcher/backups/<name>` (default 5) |
 | `network`, `sync.*`, `chat.radius` | Which servers it shares chat, joins, lists, the tab list and player data with; see [BUS.md](BUS.md) |
 
 Java servers also get `-Dlauncher.server=<name>`, and with `bus.port` set `-Dlauncher.bus` and `-Dlauncher.bus.key`.

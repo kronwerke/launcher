@@ -28,6 +28,7 @@ public final class Tests {
         propertiesKeepTheRest();
         bootPicksTheCurrentJar();
         networkReadsConsoles();
+        scheduleFindsTheNextTime();
         passed += de.kronwerke.launcher.web.AccessTests.run();
         System.out.println(passed + " checks passed");
     }
@@ -256,5 +257,18 @@ public final class Tests {
         c.set("network", "kw");
         check(Network.Policy.of(c).chat().equals("network") && Network.Policy.of(c).inNetwork(), "unknown chat mode falls back");
         check(Network.mac("k".getBytes(StandardCharsets.UTF_8), "n:main").length() == 64, "HMAC-SHA256 in hex");
+    }
+
+    static void scheduleFindsTheNextTime() {
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.of(2026, 10, 7, 4, 59, 0, 0, java.time.ZoneId.of("Europe/Berlin")); // a Wednesday
+        Map<String, Object> daily = Json.map("kind", "daily", "time", "05:00", "days", List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L), "enabled", true);
+        check(Schedule.next(daily, now).getHour() == 5 && Schedule.next(daily, now).getDayOfMonth() == 7, "daily: today at 5");
+        check(Schedule.next(daily, now.withMinute(0).withHour(5)).getDayOfMonth() == 8, "daily: at 5 itself the next is tomorrow");
+        Map<String, Object> weekend = Json.map("kind", "daily", "time", "05:00", "days", List.of(6L, 7L), "enabled", true);
+        check(Schedule.next(weekend, now).getDayOfWeek() == java.time.DayOfWeek.SATURDAY, "weekend only: Saturday");
+        Map<String, Object> every = Json.map("kind", "every", "hours", 6L, "enabled", true);
+        check(Schedule.next(every, now).getHour() == 6, "every 6 h: 6 o'clock next");
+        check(Schedule.next(every, now.withHour(23)).getHour() == 0, "every 6 h: midnight after 23");
+        check(Schedule.next(Json.map("kind", "every", "hours", 6L, "enabled", false), now) == null, "off: never");
     }
 }

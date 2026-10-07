@@ -90,6 +90,12 @@ const fmt = {
   num(n, d = 1) { return n == null || n < 0 ? "?" : dec(Number(n).toFixed(d)); },
   clock(t) { const d = new Date(t); return d.toLocaleTimeString(LANG === "de" ? "de-DE" : "en-GB", { hour: "2-digit", minute: "2-digit" }); },
   date(t) { const d = new Date(t); return d.toLocaleString(LANG === "de" ? "de-DE" : "en-GB", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); },
+  played(ms) {
+    const m = Math.round((ms || 0) / 60000);
+    if (m < 60) return m + " min";
+    const hrs = Math.floor(m / 60);
+    return hrs < 100 ? hrs + " h " + (m % 60) + " min" : hrs + " h";
+  },
   since(iso) {
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
     if (s < 60) return T("gerade eben");
@@ -656,7 +662,160 @@ const EN = {
   "Voice-Port": "Voice port",
   "UDP-Port für Simple Voice Chat, falls die Mod drin ist.": "UDP port for Simple Voice Chat, if the mod is in.",
   "An alle Server: ": "To every server: ",
-  "Umkreis": "Radius"
+  "Umkreis": "Radius",
+  "Auch in den gepackten Logs der letzten Tage": "Also in the packed logs of earlier days",
+  "Alte Logs": "Old logs",
+  " gespielt": " played",
+  "Wonach suchen? Mindestens zwei Zeichen": "What to look for? At least two characters",
+  "Suchtext": "Search text",
+  "Suche...": "Searching...",
+  " Treffer in ": " hits in ",
+  " Dateien": " files",
+  ", die neuesten zuerst": ", newest first",
+  "In den Logs suchen": "Search the logs",
+  "Spielzeit": "Playtime",
+  " insgesamt": " in all",
+  ", gerade seit ": ", right now since ",
+  "Seit der Launcher mitzählt noch keine Runde.": "No session since the launcher started counting.",
+  "alle ": "every ",
+  " Stunden": " hours",
+  "täglich": "daily",
+  "werktags": "weekdays",
+  " um ": " at ",
+  "Nächtlicher Neustart": "Nightly restart",
+  "Zu einer Uhrzeit": "At a time",
+  "Alle paar Stunden": "Every few hours",
+  "Wochentage": "Weekdays",
+  "Der Befehl ohne / oder die Nachricht an die Spieler.": "The command without / or the message to the players.",
+  "Vorwarnung": "Warnings",
+  "Minuten vorher, mit Komma. Die Spieler sehen: Neustart in 5 Minuten.": "Minutes before, separated by commas. Players see: Restart in 5 minutes.",
+  "Uhrzeit": "Time",
+  "Tage": "Days",
+  "Abstand": "Interval",
+  "Ab Mitternacht gezählt: 6 h heißt 0, 6, 12 und 18 Uhr.": "Counted from midnight: 6 h means 0, 6, 12 and 18 o'clock.",
+  "Aufgabe ändern": "Change task",
+  "Neue Aufgabe": "New task",
+  "Wo": "Where",
+  "Automatik": "Automation",
+  "Was nach der Uhr passiert, und wer Bescheid bekommt, wenn etwas schiefgeht.": "What happens by the clock, and who hears about it when something goes wrong.",
+  "Zeitplan": "Schedule",
+  "Meldungen": "Alerts",
+  "An einen Discord-Webhook oder jede andere https-Adresse.": "To a Discord webhook or any other https address.",
+  "Zeitzone ": "Time zone ",
+  ", jetzt ": ", now ",
+  "Aufgabe": "Task",
+  "Nächstes Mal": "Next",
+  "An": "On",
+  " auf allen Servern": " on every server",
+  ", warnt ": ", warns ",
+  "An oder aus": "On or off",
+  " jetzt ausführen?": " now?",
+  " wäre das nächste Mal.": " would be the next time.",
+  "Ausführen": "Run",
+  "Läuft": "Running",
+  "Jetzt": "Now",
+  "Noch nichts geplant.": "Nothing planned yet.",
+  "Neustart jede Nacht um 5": "Restart every night at 5",
+  "Backup alle 6 Stunden": "Backup every 6 hours",
+  "gesetzt (": "set (",
+  "), leer lassen zum Behalten": "), leave empty to keep it",
+  "Grenze in ms": "Limit in ms",
+  "Die Adresse bleibt im Launcher und wird nie angezeigt.": "The address stays in the launcher and is never shown.",
+  "Tick-Zeit-Grenze": "Tick time limit",
+  "ms im Schnitt über eine Minute (50 ms ist die Grenze für volle 20 TPS)": "ms on average over a minute (50 ms is the limit for a full 20 TPS)",
+  "Test gesendet": "Test sent",
+  "Test senden": "Send a test",
+  "Webhook entfernen?": "Remove the webhook?",
+  "Webhook entfernen": "Remove webhook",
+  "Wartungsarbeiten, bis gleich.": "Maintenance, back soon.",
+  "Nachricht an alle, die rausmüssen": "Message to everyone who has to leave",
+  "Wartung für ": "Maintenance for ",
+  "Alle außer Operatoren werden sofort rausgeschickt und kommen nicht mehr rein.": "Everyone but operators is sent away at once and cannot join.",
+  "Wartung an": "Maintenance on",
+  "Wartung aus": "Maintenance off",
+  "Rausgeschickt": "Sent away",
+  "Wartung": "Maintenance",
+  "Nur Operatoren kommen rein, alle anderen sehen deine Nachricht.": "Only operators get in; everyone else sees your message.",
+  "Wartung läuft": "Maintenance is on",
+  "Wartung einschalten": "Turn on maintenance",
+  "Backup jetzt": "Back up now",
+  "Backup läuft...": "Backing up...",
+  "Laden": "Download",
+  "Welt von ": "Bring back the world of ",
+  " zurückholen?": "?",
+  "Der Server stoppt, die jetzige Welt wird beiseitegelegt (nicht gelöscht), das Backup wird ausgepackt und der Server startet wieder.": "The server stops, the current world is moved aside (not deleted), the backup is unpacked and the server starts again.",
+  "Zurückholen": "Restore",
+  "Zurückgeholt": "Restored",
+  "Alte Welt liegt in": "The old world is in",
+  "Backup löschen": "Delete backup",
+  "Backup löschen?": "Delete the backup?",
+  "Gelöscht": "Deleted",
+  "Noch kein Backup. Mit dem Zeitplan geht es auch jede Nacht.": "No backup yet. The schedule can make one every night.",
+  "Backup gestartet": "Backup started",
+  "Die Welt als Zip, die neuesten bleiben (backup.keep).": "The world as a zip; the newest stay (backup.keep).",
+  "Dauer": "Duration",
+  "Misst ": "Measuring for ",
+  " Sekunden, danach erscheint hier der Link.": " seconds; the link shows up here after that.",
+  "Fertig: ": "Done: ",
+  "Profiler starten": "Start the profiler",
+  "Profiler (spark)": "Profiler (spark)",
+  "Misst, was den Server bremst, und liefert einen Bericht als Link.": "Measures what slows the server down and gives a report as a link.",
+  "Dimension": "Dimension",
+  "Radius in Blöcken": "Radius in blocks",
+  "Welt vorgenerieren (Chunky)": "Pregenerate the world (Chunky)",
+  "Erzeugt Chunks im Voraus, damit Spieler später nicht warten. Kostet CPU, am besten wenn wenig los ist.": "Generates chunks ahead so players do not wait later. Costs CPU; best when few are online.",
+  "Blöcke um den Spawn": "blocks around spawn",
+  "Pause": "Pause",
+  "Stand": "Progress",
+  "Werkzeuge": "Tools",
+  "Einstellung suchen": "Find a setting",
+  "  Änderungen wirken beim nächsten Start": "  Changes apply on the next start",
+  "Backup: ": "Backup: ",
+  "alle Minecraft-Server": "every Minecraft server",
+  "Wartung an: ": "Maintenance on: ",
+  "rausgeschickt: ": "sent away: ",
+  "an": "on",
+  "Wartung aus: ": "Maintenance off: ",
+  "aus": "off",
+  "Backup": "Backup",
+  "Mo": "Mon",
+  "Di": "Tue",
+  "Mi": "Wed",
+  "Do": "Thu",
+  "Fr": "Fri",
+  "Sa": "Sat",
+  "So": "Sun",
+  "Absturz": "Crash",
+  "Aufgegeben (drei Abstürze)": "Gave up (three crashes)",
+  "Tick-Zeit dauerhaft hoch": "Tick time stays high",
+  "Backup fertig": "Backup done",
+  "Backup fehlgeschlagen": "Backup failed",
+  "Server läuft": "Server running",
+  "Server gestoppt": "Server stopped",
+  "Text in der Serverliste": "Text in the server list",
+  "Höchstens so viele Spieler": "At most this many players",
+  "Sichtweite in Chunks": "View distance in chunks",
+  "Simulationsweite in Chunks": "Simulation distance in chunks",
+  "peaceful, easy, normal oder hard": "peaceful, easy, normal or hard",
+  "Spielmodus neuer Spieler": "Game mode of new players",
+  "Spieler können sich schaden": "Players can hurt each other",
+  "Nur Spieler auf der Whitelist": "Only players on the whitelist",
+  "Wer von der Whitelist fliegt, fliegt raus": "Whoever leaves the whitelist is kicked",
+  "Radius um den Spawn, den nur Operatoren ändern": "Radius around spawn only operators change",
+  "Konten bei Mojang prüfen": "Check accounts with Mojang",
+  "Fliegen nicht als Cheat werten": "Do not treat flying as cheating",
+  "Nach so vielen ms hängt der Server als abgestürzt (-1: nie)": "After this many ms the server counts as hung (-1: never)",
+  "Seed einer neuen Welt": "Seed of a new world",
+  "Ordner der Welt": "Folder of the world",
+  "Hardcore": "Hardcore",
+  "Nether erlaubt": "Nether allowed",
+  "Monster erscheinen": "Monsters spawn",
+  "Befehlsblöcke": "Command blocks",
+  "Minuten bis zum Kick wegen Abwesenheit (0: nie)": "Minutes until an idle kick (0: never)",
+  "Ab so vielen Bytes komprimieren": "Compress from this many bytes",
+  "Vom Launcher gesetzt (port in seiner Datei)": "Set by the launcher (port in its file)",
+  "Vom Launcher gesetzt": "Set by the launcher",
+  "Vom Launcher gesetzt (transfers)": "Set by the launcher (transfers)"
   };
 function T(s) {
   if (s == null) return s;
@@ -900,6 +1059,7 @@ const PAGES = [
   { path: "/dateien", name: "Dateien", key: "d", draw: pageFiles, scope: "files" },
   { path: "/netzwerk", name: "Netzwerk", key: "n", draw: pageNetwork },
   { path: "/ressourcen", name: "Ressourcen", key: "r", draw: pageResources },
+  { path: "/automatik", name: "Automatik", key: "a", draw: pageAutomation },
   { path: "/server", name: "Server", key: "x", draw: pageServer, hidden: true },
   { path: "/verlauf", name: "Verlauf", key: "v", draw: pageHistory },
   { path: "/zugang", name: "Zugang", key: "z", draw: pageAccess },
@@ -1416,6 +1576,7 @@ function pageConsole(main, rest) {
   const panel = h("section", { class: "panel console" },
     h("div", { class: "console-bar" }, seg, search, h("label", { class: "check" }, errBox, T("Nur Warnungen und Fehler")),
       h("span", { style: { flex: "1" } }),
+      h("button", { class: "btn small quiet", title: T("Auch in den gepackten Logs der letzten Tage"), onclick: () => logSearch(which === "alle" ? S.overview.servers[0].name : which, search.value) }, T("Alte Logs")),
       ...(which !== "alle" ? powerButtons(S.overview.servers.find(s => s.name === which) || {}, true) : [])),
     can("command") || can("players") ? h("div", { class: "prompt" }, h("label", null, ">"), input, suggest) : h("div", { class: "prompt dim" }, T("Nur lesen.")),
     h("div", { style: { position: "relative", minHeight: "0", display: "grid" } }, log, newer));
@@ -1485,7 +1646,8 @@ function pagePlayers(main, rest) {
         h("td", null, h("span", { class: "player" }, head(p.name), h("span", null, h("b", null, p.name), p.discord ? h("div", { class: "dim small" }, "Discord: " + (p.discord.name || p.discord.id)) : null))),
         h("td", null, h("span", { class: "actions" }, pills(p))),
         h("td", { class: "hide-s muted" }, roleOf(p)),
-        h("td", { class: "hide-s right dim" }, p.online ? T("jetzt") : p.seen ? fmt.date(p.seen) : "")))))));
+        h("td", { class: "hide-s right dim" }, p.online ? T("jetzt") : p.seen ? fmt.date(p.seen) : "",
+          data.playtime?.[p.name.toLowerCase()] ? h("div", { class: "small" }, fmt.played(data.playtime[p.name.toLowerCase()]) + T(" gespielt")) : null)))))));
   };
 
   const drawer = p => {
@@ -1499,6 +1661,7 @@ function pagePlayers(main, rest) {
           p.uuid ? h("p", { class: "dim mono" }, p.uuid) : null),
         h("button", { class: "btn quiet small close", onclick: () => d.close(), "aria-label": T("Schließen") }, "×")),
       p.banned != null ? h("p", { class: "muted" }, T("Grund: ") + p.banned) : null,
+      playtimeSection(p.name),
       data.roster ? h("section", { class: "drawer-sec" }, h("h3", null, "Kronwerke"),
         own ? h("p", null, (own.granted ? T("Eigener Platz. ") : T("Streamer. ")) + own.used + T(" von ") + own.slots + T(" Plätzen vergeben."))
           : by ? h("p", null, T("Eingeladen von ") + by.name + ".") : h("p", { class: "muted" }, T("Kein Platz in Kronwerke.")),
@@ -1581,6 +1744,7 @@ function pagePlayers(main, rest) {
 
   const load = async () => {
     try { data = await api("GET", "/people"); } catch (e) { put(body, h("p", { class: "empty" }, e.message)); return; }
+    try { data.playtime = Object.fromEntries((await api("GET", "/sessions")).map(x => [x.name.toLowerCase(), x.total])); } catch { data.playtime = {}; }
     if (tab === "streamer" && !data.roster) tab = "alle";
     drawSeg();
     draw();
@@ -1589,6 +1753,52 @@ function pagePlayers(main, rest) {
   load();
   let last = 0;
   on("overview", () => { if (Date.now() - last > 20000 && !$("dialog[open]")) { last = Date.now(); load(); } });
+}
+
+/** Searches a server's logs, the packed ones of earlier days included. */
+function logSearch(server, initial) {
+  const q = h("input", { type: "text", value: initial || "", placeholder: T("Wonach suchen? Mindestens zwei Zeichen"), "aria-label": T("Suchtext") });
+  const which = h("select", { "aria-label": "Server" }, S.overview.servers.filter(x => x.type !== "command").map(x => h("option", { value: x.name, selected: x.name === server || null }, x.name)));
+  const out = h("div", { class: "log logsearch" });
+  const info = h("p", { class: "dim small" });
+  const go = async () => {
+    if (q.value.trim().length < 2) return;
+    put(out, h("div", { class: "dim" }, T("Suche...")));
+    try {
+      const r = await api("GET", "/servers/" + which.value + "/logsearch?q=" + encodeURIComponent(q.value.trim()));
+      info.textContent = r.hits.length + T(" Treffer in ") + r.files + T(" Dateien") + (r.more ? T(", die neuesten zuerst") : "");
+      let file = "";
+      put(out, r.hits.length ? r.hits.flatMap(x => {
+        const head = x.file !== file ? h("div", { class: "file-sep" }, x.file) : null;
+        file = x.file;
+        return [head, h("div", { class: lineClass(x.text) }, h("span", { class: "dim" }, x.line + "  "), x.text)];
+      }) : h("div", { class: "dim" }, T("Nichts gefunden.")));
+    } catch (e) { put(out, h("div", { class: "error" }, e.message)); }
+  };
+  q.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  const d = h("dialog", { class: "wide" }, h("div", { class: "wiz" },
+    h("header", null, h("h2", null, T("In den Logs suchen")), h("button", { class: "btn quiet small", onclick: () => d.close(), "aria-label": T("Schließen") }, "×")),
+    h("div", { class: "actions" }, which, q, h("button", { class: "btn primary", onclick: go }, T("Suchen"))), info, out));
+  d.addEventListener("close", () => d.remove());
+  document.body.append(d);
+  d.showModal();
+  q.focus();
+  if (q.value) go();
+}
+
+/** Playtime and the last sessions of a player, filled in when it arrives. */
+function playtimeSection(name) {
+  const sec = h("section", { class: "drawer-sec" }, h("h3", null, T("Spielzeit")), h("p", { class: "dim" }, T("Lade...")));
+  api("GET", "/sessions/" + encodeURIComponent(name)).then(d => {
+    const list = (d.sessions || []).slice(-8).reverse();
+    put(sec, h("h3", null, T("Spielzeit")),
+      h("p", null, h("b", null, fmt.played(d.total)), T(" insgesamt"), d.online ? T(", gerade seit ") + fmt.clock(d.since) + T(" auf ") + d.online : ""),
+      list.length ? h("ol", { class: "sessions" }, list.map(x => h("li", null,
+        h("span", { class: "pill c", style: { "--c": colorOf(x.server) } }, x.server),
+        h("span", { class: "num" }, fmt.date(x.from)),
+        h("span", { class: "dim num" }, fmt.played(x.to - x.from))))) : h("p", { class: "dim" }, T("Seit der Launcher mitzählt noch keine Runde.")));
+  }).catch(() => put(sec, h("h3", null, T("Spielzeit")), h("p", { class: "dim" }, "-")));
+  return sec;
 }
 
 async function message(r) {
@@ -2157,6 +2367,113 @@ function pageNetwork(main) {
   load().catch(e => put(settings, h("p", { class: "error" }, e.message)));
 }
 
+// ---- automation: schedule and alerts ------------------------------------------------------------------
+
+const ACTION_DE = { restart: "Neustart", stop: "Stoppen", start: "Starten", command: "Befehl", say: "Nachricht", backup: "Backup" };
+const DAY_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const ALERT_DE = { crash: "Absturz", down: "Aufgegeben (drei Abstürze)", mspt: "Tick-Zeit dauerhaft hoch", backup: "Backup fertig", "backup-failed": "Backup fehlgeschlagen", start: "Server läuft", stop: "Server gestoppt" };
+
+function whenText(t) {
+  if (t.kind === "every") return T("alle ") + t.hours + T(" Stunden");
+  const days = (t.days || []).map(Number);
+  const d = days.length === 7 ? T("täglich") : days.join() === "1,2,3,4,5" ? T("werktags") : days.map(n => T(DAY_DE[n - 1])).join(", ");
+  return d + T(" um ") + t.time;
+}
+
+function taskDialog(task, onSaved) {
+  const t = Object.assign({ kind: "daily", time: "05:00", days: [1, 2, 3, 4, 5, 6, 7], hours: 6, action: "restart", server: "*", text: "", warn: [10, 5, 1], enabled: true }, task || {});
+  const servers = S.overview.servers;
+  const name = h("input", { type: "text", value: t.name || "", maxlength: 60, placeholder: T("Nächtlicher Neustart"), required: true });
+  const action = h("select", null, Object.keys(ACTION_DE).map(a => h("option", { value: a, selected: a === t.action || null }, T(ACTION_DE[a]))));
+  const server = h("select", null, h("option", { value: "*" }, T("Alle Server")), servers.map(x => h("option", { value: x.name, selected: x.name === t.server || null }, x.name)));
+  const text = h("input", { type: "text", value: t.text, maxlength: 256 });
+  const kind = h("select", null, h("option", { value: "daily", selected: t.kind === "daily" || null }, T("Zu einer Uhrzeit")), h("option", { value: "every", selected: t.kind === "every" || null }, T("Alle paar Stunden")));
+  const time = h("input", { type: "time", value: t.time || "05:00" });
+  const hours = h("select", null, [1, 2, 3, 4, 6, 8, 12, 24].map(n => h("option", { value: n, selected: n === +t.hours || null }, n + " h")));
+  const days = h("div", { class: "seg small", role: "group", "aria-label": T("Wochentage") }, DAY_DE.map((d, i) => {
+    const b = h("button", { type: "button", "aria-pressed": String((t.days || []).map(Number).includes(i + 1)) }, T(d));
+    b.addEventListener("click", () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")));
+    return b;
+  }));
+  const warn = h("input", { type: "text", value: (t.warn || []).join(", "), placeholder: "10, 5, 1" });
+  const field = (label, input, hint) => h("label", { class: "field" }, h("span", null, label), input, hint ? h("small", { class: "dim" }, hint) : null);
+  const textField = field(T("Text"), text, T("Der Befehl ohne / oder die Nachricht an die Spieler."));
+  const warnField = field(T("Vorwarnung"), warn, T("Minuten vorher, mit Komma. Die Spieler sehen: Neustart in 5 Minuten."));
+  const dailyBox = h("div", { class: "stack" }, field(T("Uhrzeit"), time), h("div", { class: "field" }, h("span", null, T("Tage")), days));
+  const everyBox = field(T("Abstand"), hours, T("Ab Mitternacht gezählt: 6 h heißt 0, 6, 12 und 18 Uhr."));
+  const sync = () => {
+    textField.hidden = !["command", "say"].includes(action.value);
+    warnField.hidden = !["restart", "stop"].includes(action.value);
+    dailyBox.hidden = kind.value !== "daily";
+    everyBox.hidden = kind.value !== "every";
+  };
+  action.addEventListener("change", sync); kind.addEventListener("change", sync); sync();
+  const err = h("p", { class: "error", role: "alert" });
+  const d = h("dialog", null, h("form", { method: "dialog", onsubmit: async e => {
+    e.preventDefault();
+    const body = { id: t.id, name: name.value.trim(), action: action.value, server: server.value, text: text.value.trim(), kind: kind.value, time: time.value,
+      hours: +hours.value, days: $$("button", days).map((b, i) => b.getAttribute("aria-pressed") === "true" ? i + 1 : 0).filter(Boolean),
+      warn: ["restart", "stop"].includes(action.value) ? warn.value.split(/[ ,;]+/).filter(Boolean).map(Number) : [], enabled: t.enabled };
+    try { await api("POST", "/schedule", body); d.close(); toast(T("Gespeichert"), body.name); onSaved(); } catch (x) { err.textContent = x.message; }
+  } },
+    h("h2", null, task ? T("Aufgabe ändern") : T("Neue Aufgabe")),
+    field(T("Name"), name), h("div", { class: "grid-two" }, field(T("Was"), action), field(T("Wo"), server)), textField,
+    field(T("Wann"), kind), dailyBox, everyBox, warnField, err,
+    h("div", { class: "actions" }, h("span", { style: { flex: "1" } }), h("button", { class: "btn quiet", type: "button", onclick: () => d.close() }, T("Abbrechen")), h("button", { class: "btn primary", type: "submit" }, T("Speichern")))));
+  d.addEventListener("close", () => d.remove());
+  document.body.append(d);
+  d.showModal();
+}
+
+function pageAutomation(main) {
+  const tasksEl = h("div");
+  const alertsEl = h("div", { class: "body stack" });
+  const zoneEl = h("p");
+  main.append(header(T("Automatik"), T("Was nach der Uhr passiert, und wer Bescheid bekommt, wenn etwas schiefgeht.")),
+    h("section", { class: "panel" },
+      h("header", null, h("div", null, h("h2", null, T("Zeitplan")), zoneEl),
+        can("config") ? h("button", { class: "btn primary", onclick: () => taskDialog(null, load) }, T("Neue Aufgabe")) : null),
+      tasksEl),
+    h("section", { class: "panel", style: { marginTop: "1rem" } },
+      h("header", null, h("div", null, h("h2", null, T("Meldungen")), h("p", null, T("An einen Discord-Webhook oder jede andere https-Adresse.")))),
+      alertsEl));
+  const load = async () => {
+    const d = await api("GET", "/schedule");
+    zoneEl.textContent = T("Zeitzone ") + d.zone + T(", jetzt ") + d.now.slice(11, 16);
+    put(tasksEl, d.tasks.length ? h("table", null,
+      h("thead", null, h("tr", null, h("th", null, T("Aufgabe")), h("th", null, T("Wann")), h("th", { class: "hide-s" }, T("Nächstes Mal")), h("th", null, T("An")), h("th"))),
+      h("tbody", null, d.tasks.map(t => h("tr", null,
+        h("td", null, h("b", null, t.name), h("div", { class: "dim small" }, T(ACTION_DE[t.action]) + (t.server === "*" ? T(" auf allen Servern") : T(" auf ") + t.server) + (t.text ? ": " + t.text : "") + (t.warn?.length && ["restart", "stop"].includes(t.action) ? T(", warnt ") + t.warn.join(", ") + " min" : ""))),
+        h("td", null, whenText(t)),
+        h("td", { class: "hide-s num" }, t.next ? fmt.date(t.next) : "-", t.last ? h("div", { class: "dim small" }, T("zuletzt ") + fmt.date(t.last)) : null),
+        h("td", null, h("input", { type: "checkbox", class: "switch", checked: t.enabled || null, disabled: !can("config") || null, "aria-label": T("An oder aus"),
+          onchange: e => run(T("Gespeichert"), () => api("POST", "/schedule", Object.assign({}, t, { enabled: e.target.checked }))).then(load) })),
+        h("td", { class: "right" }, h("div", { class: "actions", style: { justifyContent: "flex-end" } },
+          can("power") ? h("button", { class: "btn small quiet", onclick: async () => {
+            if (await confirmDialog({ title: t.name + T(" jetzt ausführen?"), text: whenText(t) + T(" wäre das nächste Mal."), ok: T("Ausführen") })) run(T("Läuft"), () => api("POST", "/schedule/" + t.id + "/run", {}));
+          } }, T("Jetzt")) : null,
+          can("config") ? h("button", { class: "btn small quiet", onclick: () => taskDialog(t, load) }, T("Ändern")) : null,
+          can("config") ? h("button", { class: "btn small quiet", "aria-label": T("Entfernen"), onclick: async () => {
+            if (await confirmDialog({ title: t.name + T(" entfernen?"), ok: T("Entfernen"), danger: true })) { await run(T("Entfernt"), () => api("DELETE", "/schedule/" + t.id, {})); load(); }
+          } }, "×") : null)))))) : h("div", { class: "empty" }, h("p", null, T("Noch nichts geplant.")), can("config") ? h("div", { class: "actions", style: { justifyContent: "center" } },
+            h("button", { class: "btn", onclick: () => run(T("Gespeichert"), () => api("POST", "/schedule", { name: T("Nächtlicher Neustart"), action: "restart", server: "*", kind: "daily", time: "05:00", warn: [10, 5, 1] })).then(load) }, T("Neustart jede Nacht um 5")),
+            h("button", { class: "btn", onclick: () => run(T("Gespeichert"), () => api("POST", "/schedule", { name: T("Backup alle 6 Stunden"), action: "backup", server: "*", kind: "every", hours: 6 })).then(load) }, T("Backup alle 6 Stunden"))) : null));
+    const a = await api("GET", "/alerts");
+    const url = h("input", { type: "url", placeholder: a.set ? T("gesetzt (") + a.host + T("), leer lassen zum Behalten") : "https://discord.com/api/webhooks/...", disabled: !can("config") || null, "aria-label": "Webhook" });
+    const boxes = Object.keys(ALERT_DE).map(k => h("label", { class: "check" }, h("input", { type: "checkbox", value: k, checked: a.events.includes(k) || null, disabled: !can("config") || null }), T(ALERT_DE[k])));
+    const mspt = h("input", { type: "number", min: 20, max: 1000, value: a.mspt, disabled: !can("config") || null, "aria-label": T("Grenze in ms") });
+    const save = () => run(T("Gespeichert"), () => api("POST", "/alerts", { webhook: url.value.trim(), events: boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value), mspt: +mspt.value })).then(load);
+    put(alertsEl,
+      h("label", { class: "field" }, h("span", null, "Webhook"), url, h("small", { class: "dim" }, T("Die Adresse bleibt im Launcher und wird nie angezeigt."))),
+      h("div", { class: "alert-grid" }, boxes),
+      h("label", { class: "field" }, h("span", null, T("Tick-Zeit-Grenze")), h("div", { class: "actions" }, mspt, h("span", { class: "dim small" }, T("ms im Schnitt über eine Minute (50 ms ist die Grenze für volle 20 TPS)")))),
+      can("config") ? h("div", { class: "actions" }, h("button", { class: "btn primary", onclick: save }, T("Speichern")),
+        a.set ? h("button", { class: "btn", onclick: () => run(T("Test gesendet"), () => api("POST", "/alerts/test", {})) }, T("Test senden")) : null,
+        a.set ? h("button", { class: "btn quiet", onclick: async () => { if (await confirmDialog({ title: T("Webhook entfernen?"), ok: T("Entfernen"), danger: true })) run(T("Entfernt"), () => api("POST", "/alerts", { webhook: "-", events: a.events, mspt: a.mspt })).then(load); } }, T("Webhook entfernen")) : null) : null);
+  };
+  load().catch(e => put(tasksEl, h("p", { class: "error body" }, e.message)));
+}
+
 // ---- history -----------------------------------------------------------------------------------------
 
 function pageHistory(main, rest) {
@@ -2497,6 +2814,10 @@ function pageServer(main, rest) {
       } }, T("Ändern")) : null),
       h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: s.autostart || null, disabled: !can("config") || null, onchange: e => set("autostart", e.target.checked, T("Gespeichert")) }), T("Mit dem Launcher starten")),
       h("label", { class: "check" }, h("input", { type: "checkbox", class: "switch", checked: s.restartOnCrash || null, disabled: !can("config") || null, onchange: e => set("restart.on.crash", e.target.checked, T("Gespeichert")) }), T("Nach einem Absturz neu starten")))),
+    s.type !== "command" ? maintenancePanel(s) : null,
+    s.type !== "command" ? backupPanel(s) : null,
+    s.type !== "command" && (s.tools || []).length ? toolsPanel(s) : null,
+    s.type !== "command" ? propertiesPanel(s) : null,
     s.name !== S.overview.servers[0].name && can("config") && can("power") ? h("section", { class: "panel danger-zone" }, h("header", null, h("h2", null, T("Server entfernen"))), h("div", { class: "body actions" },
       h("p", { class: "muted", style: { margin: "0", flex: "1" } }, T("Stoppt ihn und nimmt ihn aus dem Launcher. Sein Ordner mit Welt und Dateien bleibt.")),
       h("button", { class: "btn danger", onclick: async () => {
@@ -2505,6 +2826,141 @@ function pageServer(main, rest) {
         await run(T("Entfernt"), () => api("DELETE", "/servers/" + s.name, {}));
         setTimeout(() => go("/"), 2500);
       } }, T("Entfernen")))) : null);
+}
+
+// ---- server tools: maintenance, backups, profiler, pregeneration, server.properties ---------------
+
+function maintenancePanel(s) {
+  const msg = h("input", { type: "text", maxlength: 200, placeholder: T("Wartungsarbeiten, bis gleich."), disabled: !can("power") || null, "aria-label": T("Nachricht an alle, die rausmüssen") });
+  const sw = h("input", { type: "checkbox", class: "switch", checked: s.maintenance || null, disabled: !can("power") || null });
+  sw.addEventListener("change", async () => {
+    const on = sw.checked;
+    if (on && !(await confirmDialog({ title: T("Wartung für ") + s.name + "?", text: T("Alle außer Operatoren werden sofort rausgeschickt und kommen nicht mehr rein."), ok: T("Wartung an") }))) { sw.checked = false; return; }
+    const r = await run(on ? T("Wartung an") : T("Wartung aus"), () => api("POST", "/servers/" + s.name + "/maintenance", { on, message: msg.value.trim() }));
+    if (r?.sent?.length) toast(T("Rausgeschickt"), r.sent.join(", "));
+    refreshOverview();
+  });
+  return h("section", { class: "panel" + (s.maintenance ? " warn-zone" : "") },
+    h("header", null, h("h2", null, T("Wartung")), h("p", null, T("Nur Operatoren kommen rein, alle anderen sehen deine Nachricht."))),
+    h("div", { class: "body stack" },
+      h("label", { class: "check" }, sw, s.maintenance ? h("b", { class: "warn-text" }, T("Wartung läuft")) : T("Wartung einschalten")),
+      h("label", { class: "field" }, h("span", null, T("Nachricht")), msg)));
+}
+
+function backupPanel(s) {
+  const list = h("div");
+  const make = h("button", { class: "btn", disabled: !can("power") || null }, T("Backup jetzt"));
+  const draw = async () => {
+    let d;
+    try { d = await api("GET", "/servers/" + s.name + "/backups"); } catch (e) { return put(list, h("p", { class: "error body" }, e.message)); }
+    make.disabled = d.busy || !can("power") || null;
+    make.textContent = d.busy ? T("Backup läuft...") : T("Backup jetzt");
+    put(list, d.backups.length ? h("table", null, h("tbody", null, d.backups.map(b => h("tr", null,
+      h("td", { class: "num" }, fmt.date(b.modified)),
+      h("td", { class: "num dim" }, fmt.bytes(b.size)),
+      h("td", { class: "right" }, h("div", { class: "actions", style: { justifyContent: "flex-end" } },
+        can("files") ? h("a", { class: "btn small quiet", href: "/api/servers/" + s.name + "/backups/" + b.name, download: b.name }, T("Laden")) : null,
+        can("power") ? h("button", { class: "btn small quiet", onclick: async () => {
+          if (!(await confirmDialog({ title: T("Welt von ") + fmt.date(b.modified) + T(" zurückholen?"), text: T("Der Server stoppt, die jetzige Welt wird beiseitegelegt (nicht gelöscht), das Backup wird ausgepackt und der Server startet wieder."), ok: T("Zurückholen"), danger: true }))) return;
+          const r = await run(T("Zurückgeholt"), () => api("POST", "/servers/" + s.name + "/backups/" + b.name + ":restore", {}));
+          if (r) toast(T("Alte Welt liegt in"), r.aside);
+          draw();
+        } }, T("Zurückholen")) : null,
+        can("power") ? h("button", { class: "btn small quiet", "aria-label": T("Backup löschen"), onclick: async () => {
+          if (!(await confirmDialog({ title: T("Backup löschen?"), text: fmt.date(b.modified), ok: T("Löschen"), danger: true }))) return;
+          await run(T("Gelöscht"), () => api("DELETE", "/servers/" + s.name + "/backups/" + b.name, {}));
+          draw();
+        } }, "×") : null)))))) : h("p", { class: "empty" }, T("Noch kein Backup. Mit dem Zeitplan geht es auch jede Nacht.")));
+    if (d.busy) setTimeout(draw, 4000);
+  };
+  make.addEventListener("click", async () => { await run(T("Backup gestartet"), () => api("POST", "/servers/" + s.name + "/backups", {})); setTimeout(draw, 800); });
+  draw();
+  return h("section", { class: "panel" },
+    h("header", null, h("div", null, h("h2", null, "Backups"), h("p", null, T("Die Welt als Zip, die neuesten bleiben (backup.keep)."))), make),
+    list);
+}
+
+function toolsPanel(s) {
+  const out = h("div", { class: "stack" });
+  const tools = s.tools || [];
+  const parts = [];
+  if (tools.includes("spark")) {
+    const secs = h("select", { "aria-label": T("Dauer") }, [30, 60, 120].map(n => h("option", { value: n }, n + " s")));
+    const result = h("p", { class: "muted", style: { margin: "0" } });
+    const start = h("button", { class: "btn", disabled: !can("command") || null, onclick: async () => {
+      const n = +secs.value;
+      start.disabled = true;
+      result.textContent = T("Misst ") + n + T(" Sekunden, danach erscheint hier der Link.");
+      const stop = (() => { const f = d => {
+        if (d.server !== s.name) return;
+        const m = /https:\/\/spark\.lucko\.me\/[A-Za-z0-9]+/.exec(d.text);
+        if (m) { put(result, T("Fertig: "), h("a", { href: m[0], target: "_blank", rel: "noopener" }, m[0])); start.disabled = false; listeners.line.delete(f); }
+      }; listeners.line.add(f); return () => listeners.line.delete(f); })();
+      cleanup.push(stop);
+      try { await api("POST", "/servers/" + s.name + "/profile", { seconds: n }); } catch (e) { result.textContent = e.message; start.disabled = false; stop(); }
+    } }, T("Profiler starten"));
+    parts.push(h("div", { class: "stack" }, h("h3", { class: "sub" }, T("Profiler (spark)")),
+      h("p", { class: "muted", style: { margin: "0" } }, T("Misst, was den Server bremst, und liefert einen Bericht als Link.")),
+      h("div", { class: "actions" }, secs, start), result));
+  }
+  if (tools.includes("chunky")) {
+    const dim = h("select", { "aria-label": T("Dimension") }, ["minecraft:overworld", "minecraft:the_nether", "minecraft:the_end", ...(s.dimensions || []).map(d => d.name).filter(n => n.includes(":") && !n.startsWith("minecraft:"))]
+      .filter((v, i, a) => a.indexOf(v) === i).map(n => h("option", { value: n }, n)));
+    const radius = h("input", { type: "number", min: 100, max: 50000, step: 100, value: 3000, "aria-label": T("Radius in Blöcken") });
+    const state = h("p", { class: "muted", style: { margin: "0" } });
+    const cmd = c => run(T("Gesendet"), () => api("POST", "/servers/" + s.name + "/command", { cmd: c })).then(a => { if (a) state.textContent = String(a).trim().split("\n").pop(); return a; });
+    parts.push(h("div", { class: "stack" }, h("h3", { class: "sub" }, T("Welt vorgenerieren (Chunky)")),
+      h("p", { class: "muted", style: { margin: "0" } }, T("Erzeugt Chunks im Voraus, damit Spieler später nicht warten. Kostet CPU, am besten wenn wenig los ist.")),
+      h("div", { class: "actions" }, dim, radius, h("span", { class: "dim small" }, T("Blöcke um den Spawn"))),
+      h("div", { class: "actions" },
+        h("button", { class: "btn primary", disabled: !can("command") || null, onclick: async () => { await cmd("chunky world " + dim.value); await cmd("chunky radius " + radius.value); await cmd("chunky start"); } }, T("Starten")),
+        h("button", { class: "btn", disabled: !can("command") || null, onclick: () => cmd("chunky pause") }, T("Pause")),
+        h("button", { class: "btn", disabled: !can("command") || null, onclick: () => cmd("chunky continue") }, T("Weiter")),
+        h("button", { class: "btn quiet", disabled: !can("command") || null, onclick: () => cmd("chunky progress") }, T("Stand"))),
+      state));
+  }
+  put(out, parts);
+  return h("section", { class: "panel" }, h("header", null, h("h2", null, T("Werkzeuge"))), h("div", { class: "body" }, out));
+}
+
+const PROP_DE = {
+  "motd": "Text in der Serverliste", "max-players": "Höchstens so viele Spieler", "view-distance": "Sichtweite in Chunks",
+  "simulation-distance": "Simulationsweite in Chunks", "difficulty": "peaceful, easy, normal oder hard", "gamemode": "Spielmodus neuer Spieler",
+  "pvp": "Spieler können sich schaden", "white-list": "Nur Spieler auf der Whitelist", "enforce-whitelist": "Wer von der Whitelist fliegt, fliegt raus",
+  "spawn-protection": "Radius um den Spawn, den nur Operatoren ändern", "online-mode": "Konten bei Mojang prüfen", "allow-flight": "Fliegen nicht als Cheat werten",
+  "max-tick-time": "Nach so vielen ms hängt der Server als abgestürzt (-1: nie)", "level-seed": "Seed einer neuen Welt", "level-name": "Ordner der Welt",
+  "hardcore": "Hardcore", "allow-nether": "Nether erlaubt", "spawn-monsters": "Monster erscheinen", "enable-command-block": "Befehlsblöcke",
+  "player-idle-timeout": "Minuten bis zum Kick wegen Abwesenheit (0: nie)", "network-compression-threshold": "Ab so vielen Bytes komprimieren",
+  "server-port": "Vom Launcher gesetzt (port in seiner Datei)", "rcon.port": "Vom Launcher gesetzt", "enable-rcon": "Vom Launcher gesetzt",
+  "rcon.password": "Vom Launcher gesetzt", "accepts-transfers": "Vom Launcher gesetzt (transfers)",
+};
+
+function propertiesPanel(s) {
+  const body = h("div");
+  const filter = h("input", { type: "search", placeholder: T("Einstellung suchen"), "aria-label": T("Einstellung suchen") });
+  let rows = [];
+  const draw = () => put(body, h("table", { class: "props" }, h("tbody", null, rows.filter(r => !filter.value || r.key.includes(filter.value.toLowerCase())).map(r => {
+    const bool = r.value === "true" || r.value === "false";
+    const input = bool
+      ? h("input", { type: "checkbox", class: "switch", checked: r.value === "true" || null, disabled: r.managed || !can("config") || null })
+      : h("input", { type: "text", value: r.value, disabled: r.managed || !can("config") || null, "aria-label": r.key });
+    input.addEventListener("change", () => {
+      const v = bool ? String(input.checked) : input.value.trim();
+      run(r.key + " = " + v, () => api("POST", "/servers/" + s.name + "/properties", { key: r.key, value: v })).then(x => { if (x) r.value = v; });
+    });
+    return h("tr", null,
+      h("td", null, h("span", { class: "mono" }, r.key), PROP_DE[r.key] ? h("div", { class: "dim small" }, T(PROP_DE[r.key])) : null),
+      h("td", { class: "right" }, input));
+  }))));
+  filter.addEventListener("input", draw);
+  const d = h("details", { class: "panel props-panel" },
+    h("summary", null, "server.properties", h("span", { class: "dim small" }, T("  Änderungen wirken beim nächsten Start"))),
+    h("div", { class: "body stack" }, filter, body));
+  d.addEventListener("toggle", async () => {
+    if (!d.open || rows.length) return;
+    try { rows = await api("GET", "/servers/" + s.name + "/properties"); draw(); } catch (e) { put(body, h("p", { class: "error" }, e.message)); }
+  }, { once: false });
+  return d;
 }
 
 /** Shows a code that lets another device of the same person make its own passkey. */
@@ -2605,13 +3061,14 @@ function splitChain(line) {
 }
 
 const servers = () => S.overview.servers.map(s => s.name);
+const minecraftServers = () => S.overview.servers.filter(s => s.type !== "command").map(s => s.name);
 const mainServer = () => S.overview.servers[0].name;
 const mc = (server, command) => api("POST", "/servers/" + server + "/command", { cmd: command }).then(a => {
   if (/^ERR/.test(a || "")) throw new Error(a.replace(/^ERR\s*/, ""));
   return (a || "").replace(/^OK\s*/, "").trim() || T("erledigt");
 });
-const forServers = async (name, fn) => {
-  const list = name ? [name] : servers();
+const forServers = async (name, fn, all = servers) => {
+  const list = name ? [name] : all();
   const out = [];
   for (const n of list) out.push(n + ": " + await fn(n));
   return out.join(", ");
@@ -2647,6 +3104,12 @@ const VERBS = [
   { w: ["bonus"], a: ["streamer", "num"], say: a => a[0] + ": Bonus " + a[1], scope: "command", core: true, run: a => mc(mainServer(), "kw admin bonus " + a[0] + " " + a[1]) },
   { w: ["invite"], a: ["streamer", "player"], say: a => a[1] + T(" auf einen Platz von ") + a[0], scope: "command", core: true, run: a => mc(mainServer(), "kw admin invite " + a[0] + " " + a[1]) },
   { w: ["revoke"], a: ["streamer", "player"], say: a => T("Platz frei: ") + a[1] + T(" bei ") + a[0], scope: "command", core: true, run: a => mc(mainServer(), "kw admin revoke " + a[0] + " " + a[1]) },
+  { w: ["backup"], a: ["server?"], say: a => T("Backup: ") + (a[0] || T("alle Minecraft-Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/backups", {}), minecraftServers) },
+  { w: ["maintenance", "on"], a: ["server?"], say: a => T("Wartung an: ") + (a[0] || T("alle Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/maintenance", { on: true }).then(r => r.sent.length ? T("rausgeschickt: ") + r.sent.join(", ") : T("an")), minecraftServers) },
+  { w: ["maintenance", "off"], a: ["server?"], say: a => T("Wartung aus: ") + (a[0] || T("alle Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/maintenance", { on: false }).then(() => T("aus")), minecraftServers) },
   { w: ["pack", "update"], a: [], say: () => T("Pack aktualisieren (alle Server starten neu)"), scope: "pack", run: () => api("POST", "/pack/update", {}) },
   { w: ["reload"], a: [], say: () => T("Launcher neu laden"), scope: "power", run: () => api("POST", "/launcher/reload", {}) },
   { w: ["wait"], a: ["num"], say: a => T("Warte ") + a[0] + " s", run: a => new Promise(r => setTimeout(() => r(T("gewartet")), Math.min(600, +a[0]) * 1000)) },

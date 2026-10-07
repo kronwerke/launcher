@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- Automation page: a schedule of restarts (with warnings to the players at chosen minutes before), stops, starts, commands, messages and backups, daily at a time on chosen weekdays or every few hours; run any task now. `timezone` sets the clock.
+- Alerts to a Discord webhook or any https URL: crash, a server that gave up after three crashes, tick time above a limit for a minute, backups done or failed, starts and stops. The URL stays in `console/alerts.json` and is never shown again; a test button.
+- Backups of a Minecraft server's world: saving paused, zipped into `launcher/backups/<name>`, the newest `backup.keep` stay. Download, delete, restore (the current world is moved aside, never deleted).
+- Maintenance mode per server: only operators may join, everyone else is sent away with a message, at once and on every join.
+- A form for server.properties with a word on the common keys; keys the launcher sets are read only.
+- Search through the logs, the packed ones of earlier days included.
+- Playtime: every join and leave the network sees, per player in the players list and their side panel with the last sessions.
+- Tools on a server's page when their mod or plugin is there: spark's profiler (the report link shows when ready) and Chunky's pregeneration (dimension, radius, start, pause, continue, progress).
+- Command line: `backup [server]`, `maintenance on|off [server]`.
+
 ## 0.5.1
 
 - Mods may send `extra` with chat, joins and leaves (a rank, say); the other mods get it untouched.

@@ -438,6 +438,7 @@ public final class Server {
             }
         } else {
             note("Three crashes in ten minutes: staying stopped until someone starts it");
+            fleet.alerts().send("down", name, "three crashes in ten minutes; stays stopped until someone starts it");
         }
         return false;
     }
@@ -595,8 +596,8 @@ public final class Server {
     }
 
     /** Small helper to change keys in a .properties file without touching the rest. */
-    static final class Properties {
-        static void set(Path file, Map<String, String> values) throws IOException {
+    public static final class Properties {
+        public static void set(Path file, Map<String, String> values) throws IOException {
             List<String> lines = Files.exists(file) ? new ArrayList<>(Files.readAllLines(file, StandardCharsets.ISO_8859_1)) : new ArrayList<>();
             Map<String, String> left = new java.util.LinkedHashMap<>(values);
             boolean changed = false;

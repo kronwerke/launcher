@@ -380,6 +380,19 @@ public final class Web {
             }
         }
 
+        /** Sends a file as a download. */
+        void file(java.nio.file.Path p, String type, String name) throws IOException {
+            if (sent) return;
+            sent = true;
+            header("Content-Type", type);
+            header("Content-Disposition", "attachment; filename=\"" + name.replaceAll("[^A-Za-z0-9._-]", "_") + "\"");
+            header("Cache-Control", "no-store");
+            ex.sendResponseHeaders(200, java.nio.file.Files.size(p));
+            try (OutputStream out = ex.getResponseBody()) {
+                java.nio.file.Files.copy(p, out);
+            }
+        }
+
         /** Starts a stream of server sent events; the caller writes until the client goes. */
         OutputStream stream() throws IOException {
             sent = true;

@@ -94,6 +94,10 @@ public final class Config {
             # the container's limit.
             container.memory=
 
+            # The time zone for scheduled tasks and backup names, like Europe/Berlin. Empty: the
+            # container's (usually UTC).
+            timezone=
+
             # The disk quota in GB, for the console's bar (panels do not tell it). Empty shows only
             # what is used.
             container.disk=
@@ -176,6 +180,13 @@ public final class Config {
             sync.tablist=true
             sync.lists=true
             sync.players=false
+
+            # Maintenance: only operators may join; everyone else is sent away with the message.
+            maintenance=false
+            maintenance.message=
+
+            # How many world backups stay (launcher/backups/<name>), newest first.
+            backup.keep=5
             """;
 
     private final Properties p = new Properties();

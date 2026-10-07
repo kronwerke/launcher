@@ -44,7 +44,7 @@ Kronwerke's operations tooling keeps its key in a vault and sends it only to the
 
 ## The API
 
-Every answer is `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. A browser session also needs its `X-Kw-Csrf` header on every change; keys do not.
+Every answer is `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. A browser session also needs its `X-Csrf-Token` header on every change; keys do not.
 
 | Call | Scope | What |
 | --- | --- | --- |
@@ -66,14 +66,28 @@ Every answer is `{"ok": true, "data": ...}` or `{"ok": false, "error": "..."}`. 
 | `POST /api/launcher/reload` | power | Load the launcher afresh, servers keep running |
 | `POST /api/launcher/update` `{"version": "v0.2.1"}` | power | Install a release and take over at once |
 | `POST /api/launcher/config` `{"key": "cpu.pin", "value": "true"}` | config | cpu.pin, cpu.balance |
+| `POST /api/launcher/config` `{"key": "bus.port", "value": "25580"}` | config | The bus port; see [BUS.md](BUS.md) |
+| `GET /api/network`, `POST /api/network/say` | read, players | Networks, chat, writing to players; see [BUS.md](BUS.md) |
+| `GET /api/schedule` | read | Scheduled tasks with their next run, the time zone |
+| `POST /api/schedule` `{"name", "action", "server", "kind", "time", "days", "hours", "text", "warn", "enabled"}` | config | Adds or (with `id`) changes a task. action: restart, stop, start, command, say, backup. kind: daily (time, days 1 to 7) or every (hours) |
+| `POST /api/schedule/{id}/run`, `DELETE /api/schedule/{id}` | power, config | Runs a task now, removes it |
+| `GET /api/alerts`, `POST /api/alerts` `{"webhook", "events", "mspt"}`, `POST /api/alerts/test` | read, config | Alerts to a webhook; the URL is never shown again |
+| `GET /api/servers/{name}/backups`, `POST` | read, power | Backups of the world; POST makes one |
+| `GET /api/servers/{name}/backups/{file}` | files | Downloads one |
+| `POST /api/servers/{name}/backups/{file}:restore`, `DELETE .../{file}` | power | Restores one (the current world is moved aside), deletes one |
+| `POST /api/servers/{name}/maintenance` `{"on": true, "message": "..."}` | power | Only operators may join; returns who was sent away |
+| `GET /api/servers/{name}/properties`, `POST` `{"key", "value"}` | read, config | server.properties; keys the launcher sets are read only |
+| `GET /api/servers/{name}/logsearch?q=text` | read | Lines with the text in the logs, packed ones included |
+| `POST /api/servers/{name}/profile` `{"seconds": 30}` | command | Starts spark's profiler; the link appears in the console |
+| `GET /api/sessions`, `GET /api/sessions/{player}` | read | Playtime and sessions |
 | `GET /api/audit?n=200` | read | Who did what |
-| `GET /api/stream?servers=main,mining` | read | Server sent events: `line`, `event`, `overview` every ten seconds |
+| `GET /api/stream?servers=main,mining` | read | Server sent events: `line`, `event`, `chat`, `overview` every ten seconds |
 
 Every change lands in `launcher/console/audit.jsonl` and in the timeline.
 
 ## Files
 
-`launcher/console` holds `access.json` (people, passkeys, invites, keys, sessions; secrets only as SHA-256), `audit.jsonl`, `tls.p12` with `tls.pass`, and `setup.code` while nobody exists. Neither the console nor the link can read that folder, `link.key` or `bus.key`.
+`launcher/console` holds `access.json` (people, passkeys, invites, keys, sessions; secrets only as SHA-256), `audit.jsonl`, `schedule.json`, `alerts.json` (the webhook), `sessions.json` (playtime), `tls.p12` with `tls.pass`, and `setup.code` while nobody exists. Neither the console nor the link can read that folder, `link.key` or `bus.key`.
 
 ## Settings
 

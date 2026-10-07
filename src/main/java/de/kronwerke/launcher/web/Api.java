@@ -201,6 +201,19 @@ final class Api {
                 accessRoute(r, p);
                 return;
             }
+            case "schedule" -> {
+                scheduleRoute(r, p);
+                return;
+            }
+            case "alerts" -> {
+                alertsRoute(r, p);
+                return;
+            }
+            case "sessions" -> {
+                need(r, "read");
+                r.ok(p.length > 1 ? fleet.sessions().player(java.net.URLDecoder.decode(p[1], StandardCharsets.UTF_8)) : fleet.sessions().all());
+                return;
+            }
             case "network" -> {
                 if (p.length == 1) {
                     need(r, "read");
@@ -380,7 +393,192 @@ final class Api {
                 "role", c.get("role"), "port", c.get("port"), "memory", c.get("memory"), "share", c.number("cpu.share", 1),
                 "autostart", c.flag("autostart"), "restartOnCrash", c.flag("restart.on.crash"), "jvmArgs", c.get("jvm.args"),
                 "dir", c.get("dir"), "type", s.type(), "jar", c.get("jar"), "neoforge", c.get("neoforge"), "minecraft", c.get("minecraft"), "color", c.get("color").matches("#[0-9a-fA-F]{6}") ? c.get("color") : "", "last", last == null ? null : sampleJson(last), "players", s.metrics().players(),
-                "dimensions", s.metrics().dimensions());
+                "dimensions", s.metrics().dimensions(), "maintenance", c.flag("maintenance"), "tools", tools(s));
+    }
+
+    /** Tools the console offers buttons for, found by their jar in mods or plugins. */
+    static List<String> tools(Server s) {
+        List<String> out = new ArrayList<>();
+        for (String d : List.of("mods", "plugins")) {
+            Path dir = s.dir().resolve(d);
+            if (!Files.isDirectory(dir)) continue;
+            try (Stream<Path> st = Files.list(dir)) {
+                for (Path f : st.toList()) {
+                    String n = f.getFileName().toString().toLowerCase();
+                    if (!n.endsWith(".jar")) continue;
+                    if (n.startsWith("spark") && !out.contains("spark")) out.add("spark");
+                    if (n.startsWith("chunky") && !out.contains("chunky")) out.add("chunky");
+                }
+            } catch (IOException ignored) {
+                // unreadable folder
+            }
+        }
+        return out;
+    }
+
+    // ---- schedule, backups, alerts ----
+
+    private void scheduleRoute(Web.Req r, String[] p) throws Exception {
+        String m = r.method();
+        var sch = fleet.schedule();
+        if (p.length == 1) {
+            if (m.equals("GET")) {
+                need(r, "read");
+                r.ok(Json.map("tasks", sch.list(), "zone", sch.zone().getId(), "now", java.time.ZonedDateTime.now(sch.zone()).toString()));
+                return;
+            }
+            post(m);
+            Map<String, Object> b = r.body();
+            act(r, "config", "schedule", null, Json.str(b, "name", ""), () -> sch.put(b));
+            return;
+        }
+        String id = p[1];
+        if (p.length > 2 && p[2].equals("run")) {
+            post(m);
+            Map<String, Object> t = sch.get(id);
+            act(r, "power", "run task", null, Json.str(t, "name", ""), () -> {
+                fleet.submit(() -> sch.run(t));
+                return "running";
+            });
+            return;
+        }
+        if (m.equals("DELETE")) {
+            act(r, "config", "remove task", null, id, () -> {
+                sch.remove(id);
+                return "removed";
+            });
+            return;
+        }
+        throw new Web.Http(405, "GET, POST or DELETE");
+    }
+
+    private void alertsRoute(Web.Req r, String[] p) throws Exception {
+        String m = r.method();
+        if (p.length > 1 && p[1].equals("test")) {
+            post(m);
+            act(r, "config", "test alert", null, "", () -> fleet.alerts().test());
+            return;
+        }
+        if (m.equals("GET")) {
+            need(r, "read");
+            r.ok(fleet.alerts().state());
+            return;
+        }
+        post(m);
+        Map<String, Object> b = r.body();
+        List<String> ev = new ArrayList<>();
+        if (b.get("events") instanceof List<?> l) for (Object o : l) ev.add(String.valueOf(o));
+        act(r, "config", "alerts", null, String.join(",", ev), () -> {
+            fleet.alerts().set(Json.str(b, "webhook", ""), ev, Json.num(b, "mspt", 50));
+            return fleet.alerts().state();
+        });
+    }
+
+    private void backupsRoute(Web.Req r, Server s, String file) throws Exception {
+        String m = r.method();
+        var bk = fleet.backups();
+        if (file.isEmpty()) {
+            if (m.equals("GET")) {
+                need(r, "read");
+                r.ok(Json.map("backups", bk.list(s), "busy", bk.busy(s), "keep", s.config().number("backup.keep", 5)));
+                return;
+            }
+            post(m);
+            act(r, "power", "backup", s.name(), "", () -> {
+                if (bk.busy(s)) throw new IllegalStateException("a backup is running");
+                fleet.submit(() -> {
+                    try {
+                        bk.run(s, r.who.name());
+                    } catch (RuntimeException ignored) {
+                        // in the timeline
+                    }
+                });
+                return "started";
+            });
+            return;
+        }
+        String[] f = file.split(":", 2);
+        String name = f[0];
+        if (m.equals("GET")) {
+            need(r, "files");
+            web.audit.add(r.who, r.ip(), "download backup", s.name(), name, true);
+            r.file(bk.file(s, name), "application/zip", name);
+            return;
+        }
+        if (m.equals("DELETE")) {
+            act(r, "power", "delete backup", s.name(), name, () -> {
+                bk.delete(s, name);
+                return "deleted";
+            });
+            return;
+        }
+        if (m.equals("POST") && f.length > 1 && f[1].equals("restore")) {
+            act(r, "power", "restore backup", s.name(), name, () -> Json.map("aside", bk.restore(s, name)));
+            return;
+        }
+        throw new Web.Http(405, "GET, POST or DELETE");
+    }
+
+    /** Keys the launcher sets itself; the form shows them but does not change them. */
+    static final Set<String> MANAGED = Set.of("server-port", "rcon.port", "rcon.password", "enable-rcon", "accepts-transfers");
+
+    private static List<Object> properties(Server s) throws IOException {
+        List<Object> out = new ArrayList<>();
+        if (!Files.exists(s.properties())) return out;
+        for (String l : Files.readAllLines(s.properties(), StandardCharsets.ISO_8859_1)) {
+            int eq = l.indexOf('=');
+            if (l.startsWith("#") || eq <= 0) continue;
+            String k = l.substring(0, eq).trim();
+            out.add(Json.map("key", k, "value", k.equals("rcon.password") ? "" : l.substring(eq + 1), "managed", MANAGED.contains(k)));
+        }
+        return out;
+    }
+
+    private static void setProperty(Server s, String key, String value) throws IOException {
+        if (!key.matches("[a-z0-9.-]{1,64}")) throw new IllegalArgumentException("not a key");
+        if (MANAGED.contains(key)) throw new IllegalArgumentException(key + " is set by the launcher (its server file)");
+        if (value.contains("\n") || value.length() > 500) throw new IllegalArgumentException("one line, at most 500 characters");
+        boolean known = false;
+        for (Object o : properties(s)) if (key.equals(((Map<?, ?>) o).get("key"))) known = true;
+        if (!known) throw new IllegalArgumentException("no key " + key + " in server.properties");
+        Server.Properties.set(s.properties(), Map.of(key, value));
+    }
+
+    /** Lines with the text in the newest logs, old ones (gzipped) included, newest first. */
+    private static Map<String, Object> logSearch(Server s, String q, int max) throws IOException {
+        if (q.trim().length() < 2) throw new IllegalArgumentException("at least two characters");
+        String needle = q.toLowerCase();
+        Path dir = s.dir().resolve("logs");
+        List<Object> hits = new ArrayList<>();
+        int files = 0;
+        if (Files.isDirectory(dir)) {
+            List<Path> logs;
+            try (Stream<Path> st = Files.list(dir)) {
+                logs = st.filter(f -> f.getFileName().toString().matches(".*\\.log(\\.gz)?")).sorted(Comparator.comparing(Api::modified).reversed()).toList();
+            }
+            for (Path f : logs) {
+                if (hits.size() >= max || files >= 60) break;
+                files++;
+                List<Object> mine = new ArrayList<>();
+                try (var in = f.toString().endsWith(".gz") ? new java.util.zip.GZIPInputStream(Files.newInputStream(f)) : Files.newInputStream(f);
+                     var rd = new java.io.BufferedReader(new java.io.InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    int n = 0;
+                    for (String l; (l = rd.readLine()) != null; ) {
+                        n++;
+                        if (l.toLowerCase().contains(needle)) mine.add(Json.map("file", f.getFileName().toString(), "line", n, "text", l.length() > 400 ? l.substring(0, 400) : l));
+                    }
+                } catch (IOException e) {
+                    // a broken archive: skip it
+                }
+                // newest lines first within a file too
+                java.util.Collections.reverse(mine);
+                for (Object o : mine) {
+                    if (hits.size() >= max) break;
+                    hits.add(o);
+                }
+            }
+        }
+        return Json.map("hits", hits, "files", files, "more", hits.size() >= max);
     }
 
     static Map<String, Object> sampleJson(Metrics.Sample s) {
@@ -657,6 +855,38 @@ final class Api {
                     s.config().set("jar", name);
                     return Json.map("jar", name, "size", size);
                 });
+            }
+            case "backups" -> backupsRoute(r, s, sub);
+            case "maintenance" -> {
+                post(m);
+                Map<String, Object> b = r.body();
+                boolean on = Json.bool(b, "on", false);
+                String msg = b.containsKey("message") ? Json.str(b, "message", "") : null;
+                act(r, "power", on ? "maintenance on" : "maintenance off", s.name(), msg == null ? "" : msg,
+                        () -> Json.map("sent", fleet.network().maintenance(s, on, msg)));
+            }
+            case "properties" -> {
+                if (!s.minecraft()) throw new IllegalArgumentException("only Minecraft servers have server.properties");
+                if (m.equals("GET")) {
+                    need(r, "read");
+                    r.ok(properties(s));
+                } else {
+                    post(m);
+                    String key = Json.str(r.body(), "key", ""), value = Json.str(r.body(), "value", "");
+                    act(r, "config", "server.properties", s.name(), key + "=" + value, () -> {
+                        setProperty(s, key, value);
+                        return s.state() == Server.State.RUNNING ? "saved, applies on the next start" : "saved";
+                    });
+                }
+            }
+            case "logsearch" -> {
+                need(r, "read");
+                r.ok(logSearch(s, r.q("q", ""), (int) Math.min(1000, Long.parseLong(r.q("max", "300")))));
+            }
+            case "profile" -> {
+                post(m);
+                long secs = Math.max(10, Math.min(300, Json.num(r.body(), "seconds", 30)));
+                act(r, "command", "profile", s.name(), secs + " s", () -> s.command("spark profiler start --timeout " + secs));
             }
             case "mods" -> {
                 Mods.Target target = Mods.target(s, fleet.pack().local());

@@ -204,6 +204,10 @@ public final class Network {
     }
 
     void presence(Server s, String kind, String player, String uuid, Map<String, Object> extra) {
+        if (kind.equals("join") && maintenance(s) && !operator(s, player)) {
+            kick(s, player);
+            return;
+        }
         Map<String, Object> e = Json.map("kind", kind, "server", s.name(), "player", player);
         e.putAll(extra);
         record(e);
@@ -279,6 +283,64 @@ public final class Network {
                 // a listener's problem
             }
         }
+    }
+
+    // ---- maintenance ----
+
+    public static boolean maintenance(Server s) {
+        return s.config().flag("maintenance");
+    }
+
+    static String maintenanceMessage(Server s, Config launcher) {
+        String m = s.config().get("maintenance.message");
+        if (!m.isEmpty()) return m;
+        return launcher.get("console.language").equals("de") ? "Wartungsarbeiten, bis gleich." : "Maintenance, back soon.";
+    }
+
+    /** An operator by ops.json in the server's folder. */
+    static boolean operator(Server s, String name) {
+        try {
+            Path f = s.dir().resolve("ops.json");
+            if (!Files.exists(f)) return false;
+            if (Json.parse(Files.readString(f)) instanceof List<?> l) {
+                for (Object o : l) if (o instanceof Map<?, ?> m && name.equalsIgnoreCase(String.valueOf(m.get("name")))) return true;
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // unreadable: nobody is an operator
+        }
+        return false;
+    }
+
+    private void kick(Server s, String player) {
+        if (!s.rcon() || s.state() != Server.State.RUNNING) return;
+        String msg = maintenanceMessage(s, fleet.config());
+        fleet.submit(() -> {
+            try {
+                s.command("kick " + player + " " + msg);
+            } catch (IOException | RuntimeException ignored) {
+                // gone already
+            }
+        });
+    }
+
+    /** Turns maintenance on or off; on sends everyone but operators away at once. Returns who was sent away. */
+    public List<String> maintenance(Server s, boolean on, String message) throws IOException {
+        if (message != null) {
+            if (message.length() > 200 || message.contains("\n")) throw new IllegalArgumentException("one line, at most 200 characters");
+            s.config().set("maintenance.message", message.trim());
+        }
+        s.config().set("maintenance", Boolean.toString(on));
+        List<String> sent = new ArrayList<>();
+        if (on) {
+            for (String p : s.metrics().players()) {
+                if (!operator(s, p)) {
+                    kick(s, p);
+                    sent.add(p);
+                }
+            }
+        }
+        fleet.event("maintenance", s.name(), on ? "maintenance on" + (sent.isEmpty() ? "" : ", sent away: " + String.join(", ", sent)) : "maintenance off");
+        return sent;
     }
 
     // ---- lists ----

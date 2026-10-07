@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -61,6 +62,10 @@ public final class Fleet {
     private final Metrics container = new Metrics();
     private volatile Map<String, List<Integer>> pinned = Map.of();
     private final Network network = new Network(this);
+    private final Alerts alerts;
+    private final Schedule schedule;
+    private final Backups backups = new Backups(this);
+    private final Sessions sessions;
 
     public Fleet(Path root, Config cfg, String java, PrintStream out) throws IOException {
         this.root = root;
@@ -73,6 +78,10 @@ public final class Fleet {
         if (Boot.shared().remove("events") instanceof List<?> saved) {
             for (Object e : saved) events.addLast(Json.object(String.valueOf(e)));
         }
+        this.alerts = new Alerts(this);
+        this.schedule = new Schedule(this);
+        this.sessions = new Sessions(this);
+        network.onFeed(sessions::on);
     }
 
     // ---- what others see ----
@@ -127,6 +136,22 @@ public final class Fleet {
 
     public Server main() {
         return server(null);
+    }
+
+    public Alerts alerts() {
+        return alerts;
+    }
+
+    public Schedule schedule() {
+        return schedule;
+    }
+
+    public Backups backups() {
+        return backups;
+    }
+
+    public Sessions sessions() {
+        return sessions;
     }
 
     /** Chat, joins, lists and the bus between the servers. */
@@ -208,6 +233,20 @@ public final class Fleet {
         }
         for (var l : ls) l.accept(s);
         if (s.state() == Server.State.RUNNING || s.state() == Server.State.STOPPED) work.submit(() -> applyCpu(null));
+        switch (s.state()) {
+            case CRASHED -> {
+                sessions.serverDown(s.name());
+                alerts.send("crash", s.name(), "crashed" + (s.detail().isEmpty() ? "" : ": " + s.detail()));
+            }
+            case STOPPED -> {
+                sessions.serverDown(s.name());
+                if (!updating) alerts.send("stop", s.name(), "stopped");
+            }
+            case RUNNING -> alerts.send("start", s.name(), "running");
+            default -> {
+                // nothing to tell
+            }
+        }
     }
 
     // ---- running ----
@@ -227,6 +266,7 @@ public final class Fleet {
             }
         }
         network.start();
+        schedule.start();
         for (Server s : servers()) s.begin();
         started.countDown();
         Thread monitor = new Thread(this::monitor, "monitor");
@@ -260,6 +300,8 @@ public final class Fleet {
             }
         }
         network.close();
+        schedule.stop();
+        sessions.save();
         result = "exit";
         done.countDown();
     }
@@ -268,6 +310,8 @@ public final class Fleet {
     public void reload() {
         note("Handing the servers to the next launcher");
         network.close();
+        schedule.stop();
+        sessions.save();
         for (Server s : servers()) s.detach();
         synchronized (events) {
             Boot.shared().put("events", events.stream().map(Json::write).toList());
@@ -652,6 +696,8 @@ public final class Fleet {
             }
         }
         m.add(new Metrics.Sample(now / 1000, cpu, rss, tps, mspt, players));
+        double mean = m.meanMspt(6);
+        if (mean > alerts.mspt()) alerts.send("mspt", s.name(), String.format(Locale.ROOT, "tick time %.0f ms over the last minute", mean));
     }
 
     /**
