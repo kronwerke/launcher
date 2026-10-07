@@ -4,13 +4,18 @@
 
 For everyone, not only Kronwerke.
 
-- Server types: `neoforge` (as before; the version from the pack or `neoforge=`), `jar` (Paper, Fabric, vanilla, any jar), `command` (any program, with `stop` and a `ready` pattern). RCON, EULA and server.properties only for Minecraft.
-- The launcher's files live in `launcher/`; an install with `kronwerke/` keeps it. Installed launcher jars in `launcher/jars` (`kronwerke/launcher` there).
-- Nothing Kronwerke in the defaults: `name` for the console's title and the launcher's lines, `console.host` must be set, `pack.url` and `bus.port` empty, `update.repo` for where updates come from, `link.name` defaults to `launcher`.
-- `transfers` sets accepts-transfers; a second server no longer gets it by itself. `share` and `own` choose what a second server links or copies.
-- The console speaks English and German (`console.language`), takes an accent colour (`console.accent`) and per server colours (`color`). The season page only shows with Kronwerke Core (`console.season`).
+- Server types: `neoforge` (the version from the pack or `neoforge=`, installed into the server's own folder), `jar` (Paper, Fabric, vanilla, any jar), `command` (any program, with `stop` and a `ready` pattern). RCON, EULA and server.properties only for Minecraft.
+- Server software from the console: Paper, Purpur, Folia, Fabric, NeoForge, Vanilla, Velocity with their version lists, checked against the makers' checksums, or an uploaded jar. A wizard for a new server (software, version, name, port, memory, EULA), one to change a server's software, and a welcome wizard for name, language and colour.
+- A page per server: software, folder, port, memory, JVM flags, start settings, removing it (its folder stays).
+- Mods and plugins: every jar matched by hash against Modrinth and CurseForge with name, icon, summary and the newest version for the server's loader and Minecraft version; search Modrinth (only what runs on a server), install with required dependencies, update, remove (into `.removed`). CurseForge goes through a proxy that holds the key (`curseforge.proxy`), or an own key in `console/curseforge.key`.
+- Players: everyone the server knows, online or not (usercache, whitelist, operators, bans), with a side panel per player for messages, kicks, whitelist, op and bans. With Kronwerke Core also its streamers and their slots.
+- White label: the launcher's folder is whichever holds `launcher.properties` (`launcher/` on a new install), `name`, `console.accent` and a `logo.svg` or `logo.png` next to it brand the console; codes, keys and the cookie carry no name. The release jar is `launcher.jar`.
+- The console speaks English and German (`console.language`), with colours per server (`color`). The season page only shows with Kronwerke Core (`console.season`).
+- Fixes: the command line sits above the console's lines; CPU in percent of one core like the panels; memory like `docker stats`, its limit from the panel's `SERVER_MEMORY`; the disk counted every five minutes, its quota from `container.disk`; inline styles in the console were ignored (the API key dialog fell apart).
+- More to touch: values under the cursor on the tick time, a notice when a server crashes, player names in chat lines open the player, files dropped on the files page are uploaded.
+- `transfers` sets accepts-transfers; `share` and `own` choose what a second server links or copies.
 - Java servers get `-Dlauncher.server`, `-Dlauncher.role`, `-Dlauncher.bus` and `-Dlauncher.bus.key` (were `kronwerke.*`).
-- `launcher status|start|stop|restart|update|reload` in the panel's console; `kronwerke ...` still works.
+- `launcher status|start|stop|restart|update|reload` in the panel's console; `kronwerke ...` still works. API keys start with `key_`; `kwc_` keys keep working. Sessions from 0.2 end once.
 
 ## 0.2.0
 
