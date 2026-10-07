@@ -4,6 +4,7 @@ import de.kronwerke.boot.Boot;
 
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -59,6 +60,7 @@ public final class Fleet {
     private final List<Consumer<Server>> stateListeners = new ArrayList<>();
     private final Metrics container = new Metrics();
     private volatile Map<String, List<Integer>> pinned = Map.of();
+    private final Network network = new Network(this);
 
     public Fleet(Path root, Config cfg, String java, PrintStream out) throws IOException {
         this.root = root;
@@ -125,6 +127,11 @@ public final class Fleet {
 
     public Server main() {
         return server(null);
+    }
+
+    /** Chat, joins, lists and the bus between the servers. */
+    public Network network() {
+        return network;
     }
 
     public Map<String, List<Integer>> pinned() {
@@ -219,6 +226,7 @@ public final class Fleet {
                 note("Pack update failed: " + e.getMessage() + "; starting with the pack as it is");
             }
         }
+        network.start();
         for (Server s : servers()) s.begin();
         started.countDown();
         Thread monitor = new Thread(this::monitor, "monitor");
@@ -251,6 +259,7 @@ public final class Fleet {
                 Thread.currentThread().interrupt();
             }
         }
+        network.close();
         result = "exit";
         done.countDown();
     }
@@ -258,6 +267,7 @@ public final class Fleet {
     /** Hands every running server to the next launcher version and ends this one. */
     public void reload() {
         note("Handing the servers to the next launcher");
+        network.close();
         for (Server s : servers()) s.detach();
         synchronized (events) {
             Boot.shared().put("events", events.stream().map(Json::write).toList());
@@ -388,6 +398,17 @@ public final class Fleet {
         }
         Path eula = dir.resolve("eula.txt");
         if (s.minecraft() && !Files.exists(eula) && Files.exists(root.resolve("eula.txt"))) Files.copy(root.resolve("eula.txt"), eula);
+        Path props = s.properties(), rootProps = root.resolve("server.properties");
+        if (s.minecraft() && !Files.exists(props) && Files.exists(rootProps)) {
+            // the first server's settings (whitelist, difficulty, view distance), with a world,
+            // ports and RCON of its own
+            List<String> keep = new ArrayList<>();
+            for (String l : Files.readAllLines(rootProps, StandardCharsets.ISO_8859_1)) {
+                if (!l.matches("(level-seed|level-name|server-port|query\\.port|rcon\\.port|rcon\\.password|enable-query)=.*")) keep.add(l);
+            }
+            Files.write(props, keep, StandardCharsets.ISO_8859_1);
+        }
+        network.linkLists(s, root);
     }
 
     private static void copy(Path from, Path to) throws IOException {
@@ -402,6 +423,11 @@ public final class Fleet {
                 else Files.copy(p, t, StandardCopyOption.COPY_ATTRIBUTES);
             }
         }
+    }
+
+    /** Links a server's shared lists after it joined a network in the console. */
+    public void linkLists(Server s) throws IOException {
+        network.linkLists(s, root);
     }
 
     /** Heap of every server that runs or wants to, plus the JVM's own share, has to fit. */
@@ -580,6 +606,7 @@ public final class Fleet {
             }
             long now = System.currentTimeMillis();
             for (Server s : servers()) work.submit(() -> sample(s, now));
+            work.submit(network::tick);
             if (now - countedAt > 300_000) {
                 countedAt = now;
                 work.submit(() -> diskUsed = Proc.folderSize(root));

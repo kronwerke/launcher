@@ -78,8 +78,9 @@ public final class Config {
             # Where launcher updates come from: a GitHub repository with releases like this one's.
             update.repo=kronwerke/launcher
 
-            # A loopback port mods can connect to for chat, tablist and moves between servers
-            # (Kronwerke Core does). Empty turns it off.
+            # A loopback port mods connect to for chat, tab list and moves between the servers of
+            # a network (Kronwerke Core does; see network= in the servers' files). Empty turns it
+            # off; chat and joins still travel through the consoles then.
             bus.port=
 
             # Limit each server to its share of the container's CPUs. Only when the container's
@@ -153,8 +154,28 @@ public final class Config {
             # Passed to the server as -Dlauncher.role; Kronwerke Core reads it (main, mining, ...).
             role=%s
 
-            # The server's colour in the console, empty for one from the palette.
+            # The server's colour in the console and in front of its chat on the other servers,
+            # empty for one from the palette. label is its name there (empty: the file's name).
             color=
+            label=
+
+            # Servers with the same network name share what is switched on below. Empty: this
+            # server stands alone.
+            network=
+
+            # Chat: "network" shows it on every server of the network, "server" keeps it on this
+            # server, "radius" only reaches players within chat.radius blocks (radius needs a mod
+            # on the bus, like Kronwerke Core).
+            sync.chat=network
+            chat.radius=100
+
+            # Joins and leaves shown on the other servers; every player in every tab list (needs a
+            # mod on the bus); whitelist, bans and operators kept the same; player data moving
+            # with the player between servers (needs a mod on the bus).
+            sync.joins=true
+            sync.tablist=true
+            sync.lists=true
+            sync.players=false
             """;
 
     private final Properties p = new Properties();

@@ -61,14 +61,13 @@ const ICON = {
   download: '<path d="M12 4v12M6 10l6 6 6-6M4 20h16" />',
 };
 
-const SERVER_COLORS = { main: "var(--gold)", mining: "var(--blue)" };
-const EXTRA = ["var(--violet)", "var(--teal)"];
+/** A server's colour: its own, or the palette's by its place in the start order. */
+const PALETTE = ["var(--gold)", "var(--blue)", "var(--violet)", "var(--teal)"];
 function colorOf(name) {
-  const own = (S.overview?.servers || []).find(s => s.name === name)?.color;
+  const all = S.overview?.servers || [];
+  const own = all.find(s => s.name === name)?.color;
   if (own) return own;
-  if (SERVER_COLORS[name]) return SERVER_COLORS[name];
-  const names = (S.overview?.servers || []).map(s => s.name).filter(n => !SERVER_COLORS[n]);
-  return EXTRA[Math.max(0, names.indexOf(name)) % EXTRA.length];
+  return PALETTE[Math.max(0, all.findIndex(s => s.name === name)) % PALETTE.length];
 }
 function resolveColor(v) {
   const m = /var\((--[a-z]+)\)/.exec(v);
@@ -611,7 +610,53 @@ const EN = {
   "Kein Code": "No code",
   "Auf dem anderen Gerät ": "On the other device open ",
   " öffnen, unten auf koppel es mit einem Code tippen und diesen Code eingeben:": ", tap pair it with a code at the bottom and enter this code:",
-  "Gilt einmal, noch ": "Works once, for another "
+  "Gilt einmal, noch ": "Works once, for another ",
+  "alle": "all",
+  " ist da": " joined",
+  " ist weg": " left",
+  ", weiter nach ": ", moving on to ",
+  "Welche Server zusammengehören": "Which servers belong together",
+  "Mod am Bus": "Mod on the bus",
+  "über die Konsole": "through the console",
+  "ohne RCON": "no RCON",
+  "Chat aller Server": "Chat of every server",
+  "Server filtern": "Filter by server",
+  "Netzwerk": "Network",
+  "Welche Server Chat, Beitritte, Tabliste und Listen teilen, und was gerade gesagt wird.": "Which servers share chat, joins, the tab list and lists, and what is being said right now.",
+  "Chat": "Chat",
+  "Karte": "Map",
+  "Linien verbinden, was geteilt wird": "Lines connect what is shared",
+  "Was geteilt wird": "What is shared",
+  "Wirkt sofort. Tabliste, Umkreis und Spielerdaten brauchen eine Mod am Bus.": "Applies at once. Tab list, radius and player data need a mod on the bus.",
+  "Nachricht an die Spieler": "Message to the players",
+  "An welchen Server": "To which server",
+  "Gesendet": "Sent",
+  "Alle Server": "All servers",
+  "Noch nichts gesagt. Chat und Beitritte erscheinen hier, sobald sie passieren.": "Nothing said yet. Chat and joins show up here as they happen.",
+  "Beitritte": "Joins",
+  "Tabliste": "Tab list",
+  "Listen": "Lists",
+  "Spielerdaten": "Player data",
+  "Anbindung": "Connection",
+  "allein": "alone",
+  "Netzwerk von ": "Network of ",
+  "Wirkt, sobald eine Mod am Bus ist": "Works once a mod is on the bus",
+  "Umkreis in Blöcken": "Radius in blocks",
+  "Blöcke": "blocks",
+  "Kein Minecraft-Server da.": "No Minecraft server here.",
+  "Port des Busses": "Bus port",
+  "Bus offen": "Bus open",
+  "Bus aus": "Bus off",
+  "Nur im Container erreichbar, Mods melden sich mit dem Schlüssel aus bus.key.": "Reachable only inside the container; mods sign in with the key from bus.key.",
+  "Ohne Bus gehen Chat und Beitritte über die Konsolen der Server.": "Without the bus, chat and joins travel through the servers' consoles.",
+  "leer: keiner": "empty: none",
+  "Gleiches Pack wie ": "Same pack as ",
+  ": Mods und Configs werden verlinkt, ein Update gilt für beide": ": mods and configs are linked, one update covers both",
+  "Server mit dem gleichen Netzwerk teilen Chat, Beitritte und Listen. Was genau, stellst du unter Netzwerk ein.": "Servers with the same network share chat, joins and lists. What exactly is set on the Network page.",
+  "Voice-Port": "Voice port",
+  "UDP-Port für Simple Voice Chat, falls die Mod drin ist.": "UDP port for Simple Voice Chat, if the mod is in.",
+  "An alle Server: ": "To every server: ",
+  "Umkreis": "Radius"
   };
 function T(s) {
   if (s == null) return s;
@@ -853,6 +898,7 @@ const PAGES = [
   { path: "/season", name: "Season", key: "e", draw: pageSeason, feature: "season" },
   { path: "/pack", name: "Mods und Plugins", key: "m", draw: pagePack },
   { path: "/dateien", name: "Dateien", key: "d", draw: pageFiles, scope: "files" },
+  { path: "/netzwerk", name: "Netzwerk", key: "n", draw: pageNetwork },
   { path: "/ressourcen", name: "Ressourcen", key: "r", draw: pageResources },
   { path: "/server", name: "Server", key: "x", draw: pageServer, hidden: true },
   { path: "/verlauf", name: "Verlauf", key: "v", draw: pageHistory },
@@ -930,7 +976,7 @@ function header(title, text, ...actions) {
 
 // ---- live ---------------------------------------------------------------------------------
 
-const listeners = { line: new Set(), event: new Set(), overview: new Set() };
+const listeners = { line: new Set(), event: new Set(), overview: new Set(), chat: new Set() };
 function on(kind, fn) { listeners[kind].add(fn); cleanup.push(() => listeners[kind].delete(fn)); }
 
 function startStream() {
@@ -957,6 +1003,10 @@ function startStream() {
       refreshOverview();
       if (/^crashed/.test(d.text || "")) toast(d.server + T(" ist abgestürzt"), (d.text || "").replace(/^crashed:?\s*/, ""), true);
     }
+  });
+  es.addEventListener("chat", e => {
+    const d = JSON.parse(e.data);
+    for (const f of listeners.chat) f(d);
   });
   es.addEventListener("overview", e => {
     S.overview = JSON.parse(e.data);
@@ -1891,6 +1941,222 @@ function pageResources(main) {
   on("overview", () => { if (Date.now() - last > 30000 && !document.activeElement?.matches("input")) { last = Date.now(); draw(); } });
 }
 
+// ---- network ---------------------------------------------------------------------------------------
+
+const CHAT_DE = { network: "Netzwerk", server: "Server", radius: "Umkreis" };
+
+/** One line of the network's chat. */
+function feedLine(e) {
+  const tag = h("span", { class: "pill c", style: { "--c": colorOf(e.server) } }, e.server === "*" ? T("alle") : e.server);
+  const time = h("time", { class: "dim num", datetime: e.t }, fmt.clock(e.t));
+  if (e.kind === "say") return h("li", { class: "say" }, time, tag, h("b", null, e.player), h("span", null, e.text));
+  const head = h("img", { src: "https://mc-heads.net/avatar/" + encodeURIComponent(e.player) + "/32", alt: "", loading: "lazy" });
+  if (e.kind === "join" || e.kind === "leave") {
+    return h("li", { class: "presence" }, time, tag, head, h("span", null, e.player + (e.kind === "join" ? T(" ist da") : T(" ist weg")) + (e.to ? T(", weiter nach ") + e.to : "")));
+  }
+  return h("li", null, time, tag, head, h("b", null, e.player), h("span", null, e.text), e.scope && e.scope !== "network" ? h("span", { class: "pill" }, T(CHAT_DE[e.scope] || e.scope)) : null);
+}
+
+/**
+ * The map: one dot per Minecraft server, lines between the servers of a network. A message
+ * travels along the lines as a small light, so the map shows what the settings mean.
+ */
+function netMap(servers) {
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t, a) => { const x = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) x.setAttribute(k, v); return x; };
+  const groups = [];
+  for (const s of servers) {
+    const g = s.network ? groups.find(x => x.name === s.network) : null;
+    if (g) g.members.push(s); else groups.push({ name: s.network, members: [s] });
+  }
+  const pos = {};
+  let x = 0;
+  const H = 190;
+  for (const g of groups) {
+    const n = g.members.length, w = n === 1 ? 110 : n === 2 ? 220 : 240;
+    const cx = x + w / 2, cy = H / 2 + 10;
+    g.members.forEach((s, i) => {
+      if (n === 1) pos[s.server] = [cx, cy];
+      else if (n === 2) pos[s.server] = [cx + (i ? 60 : -60), cy];
+      else { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; pos[s.server] = [cx + 72 * Math.cos(a), cy + 60 * Math.sin(a)]; }
+    });
+    g.x = cx;
+    x += w;
+  }
+  const svgEl = el("svg", { viewBox: "0 0 " + Math.max(x, 240) + " " + H, class: "netmap", role: "img", "aria-label": T("Welche Server zusammengehören") });
+  const lines = el("g", {}), dots = el("g", {}), lights = el("g", {});
+  for (const g of groups) {
+    if (g.name) {
+      const t = el("text", { x: g.x, y: 18, class: "net-name", "text-anchor": "middle" });
+      t.textContent = g.name;
+      svgEl.append(t);
+    }
+    const m = g.members;
+    for (let i = 0; i < m.length; i++) for (let j = i + 1; j < m.length; j++) {
+      const [a, b] = [pos[m[i].server], pos[m[j].server]];
+      lines.append(el("line", { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: "net-line" + (m[i].chat === "network" && m[j].chat === "network" ? "" : " quiet") }));
+    }
+  }
+  for (const s of servers) {
+    const [cx, cy] = pos[s.server];
+    const c = resolveColor(colorOf(s.server));
+    const g = el("g", { class: "net-node" + (s.running ? "" : " off"), "data-server": s.server });
+    g.append(el("circle", { cx, cy, r: 19, fill: "var(--panel)", stroke: c, "stroke-width": 2, "stroke-dasharray": s.bus ? "" : "3 3" }));
+    const n = el("text", { x: cx, y: cy + 4, "text-anchor": "middle", class: "net-count", fill: c });
+    n.textContent = (S.overview?.servers.find(o => o.name === s.server)?.players || []).length;
+    const l = el("text", { x: cx, y: cy + 36, "text-anchor": "middle", class: "net-label" });
+    l.textContent = s.label;
+    const title = el("title", {});
+    title.textContent = s.server + ": " + (s.bus ? T("Mod am Bus") : s.rcon ? T("über die Konsole") : T("ohne RCON"));
+    g.append(n, l, title);
+    dots.append(g);
+  }
+  svgEl.append(lines, lights, dots);
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /** A message from one server: a light to every server that shows it. */
+  svgEl.pulse = (from, kind) => {
+    const src = servers.find(s => s.server === from);
+    if (!src || !pos[from]) return;
+    const node = dots.querySelector('[data-server="' + CSS.escape(from) + '"]');
+    node?.classList.remove("ping"); void node?.getBoundingClientRect(); node?.classList.add("ping");
+    if (still || !src.network) return;
+    const to = servers.filter(s => s.server !== from && s.network === src.network && (kind === "chat" ? s.chat === "network" && src.chat === "network" : s.joins && src.joins));
+    for (const t of to) {
+      const [a, b] = [pos[from], pos[t.server]];
+      const dot = el("circle", { r: 4, class: "net-light", fill: resolveColor(colorOf(from)) });
+      lights.append(dot);
+      const t0 = performance.now(), D = 650;
+      const step = now => {
+        const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+        dot.setAttribute("cx", a[0] + (b[0] - a[0]) * e);
+        dot.setAttribute("cy", a[1] + (b[1] - a[1]) * e);
+        if (k < 1) requestAnimationFrame(step); else dot.remove();
+      };
+      requestAnimationFrame(step);
+    }
+  };
+  return svgEl;
+}
+
+function pageNetwork(main) {
+  const st = { data: null, filter: "*", feed: [] };
+  const mapBox = h("div", { class: "netmap-box" });
+  const feedEl = h("ol", { class: "feed", "aria-live": "polite", "aria-label": T("Chat aller Server") });
+  const filterEl = h("div", { class: "seg", role: "group", "aria-label": T("Server filtern") });
+  const settings = h("div");
+  const busEl = h("div");
+  main.append(header(T("Netzwerk"), T("Welche Server Chat, Beitritte, Tabliste und Listen teilen, und was gerade gesagt wird.")),
+    h("div", { class: "grid-2" },
+      h("section", { class: "panel" },
+        h("header", { class: "net-head" }, h("h2", null, T("Chat")), filterEl),
+        can("players") ? sayForm() : null,
+        feedEl),
+      h("section", { class: "panel" },
+        h("header", null, h("h2", null, T("Karte")), h("p", null, T("Linien verbinden, was geteilt wird"))),
+        h("div", { class: "body" }, mapBox, busEl))),
+    h("section", { class: "panel", style: { marginTop: "1rem" } },
+      h("header", null, h("h2", null, T("Was geteilt wird")), h("p", null, T("Wirkt sofort. Tabliste, Umkreis und Spielerdaten brauchen eine Mod am Bus."))),
+      settings));
+
+  function sayForm() {
+    const input = h("input", { type: "text", maxlength: 256, placeholder: T("Nachricht an die Spieler"), "aria-label": T("Nachricht an die Spieler") });
+    const to = h("select", { "aria-label": T("An welchen Server") });
+    const f = h("form", { class: "say-form", onsubmit: async e => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      await run(T("Gesendet"), () => api("POST", "/network/say", { text, servers: to.value === "*" ? [] : [to.value] }));
+      input.value = "";
+    } }, to, input, h("button", { class: "btn primary", type: "submit" }, T("Senden")));
+    f.fill = servers => put(to, h("option", { value: "*" }, T("Alle Server")), servers.map(s => h("option", { value: s.server }, s.label)));
+    st.sayForm = f;
+    return f;
+  }
+
+  const drawFeed = () => {
+    const rows = st.feed.filter(e => st.filter === "*" || e.server === st.filter || e.server === "*");
+    put(feedEl, rows.length ? rows.slice(-200).map(feedLine) : h("li", { class: "empty" }, T("Noch nichts gesagt. Chat und Beitritte erscheinen hier, sobald sie passieren.")));
+    feedEl.scrollTop = feedEl.scrollHeight;
+  };
+  const drawFilter = servers => put(filterEl, [{ server: "*", label: T("Alle") }, ...servers].map(s => h("button", {
+    type: "button", "aria-pressed": String(st.filter === s.server), onclick: () => { st.filter = s.server; drawFilter(servers); drawFeed(); },
+  }, s.server === "*" ? null : h("span", { class: "dot", style: { "--c": colorOf(s.server) } }), s.label)));
+
+  const save = (server, key, value) => run(T("Gespeichert"), () => api("POST", "/servers/" + server + "/config", { key, value: String(value) })).then(load);
+
+  const drawSettings = d => {
+    const mcs = d.servers.filter(s => s.minecraft);
+    const names = [...new Set(mcs.map(s => s.network).filter(Boolean))];
+    const edit = can("config");
+    const list = h("datalist", { id: "net-names" }, names.map(n => h("option", { value: n })));
+    put(settings, list, mcs.length ? h("div", { class: "table-wrap" }, h("table", { class: "net-table" },
+      h("thead", null, h("tr", null, h("th", null, "Server"), h("th", null, T("Netzwerk")), h("th", null, "Chat"),
+        h("th", null, T("Beitritte")), h("th", null, T("Tabliste")), h("th", null, T("Listen")), h("th", null, T("Spielerdaten")), h("th", null, T("Anbindung")))),
+      h("tbody", null, mcs.map(s => {
+        const net = h("input", { type: "text", value: s.network, list: "net-names", placeholder: T("allein"), size: 10, maxlength: 24, disabled: !edit || null, "aria-label": T("Netzwerk von ") + s.server });
+        net.addEventListener("change", () => save(s.server, "network", net.value.trim().toLowerCase()));
+        const off = !s.network;
+        const sw = (key, on, needsBus) => h("input", { type: "checkbox", class: "switch", checked: on || null, disabled: !edit || off || null,
+          title: needsBus && !s.bus ? T("Wirkt, sobald eine Mod am Bus ist") : null, "aria-label": key + " " + s.server,
+          onchange: e => save(s.server, key, e.target.checked) });
+        const chat = h("div", { class: "seg small", role: "group", "aria-label": "Chat " + s.server }, ["network", "server", "radius"].map(c => h("button", {
+          type: "button", "aria-pressed": String(s.chat === c), disabled: !edit || null, onclick: () => save(s.server, "sync.chat", c),
+        }, T(CHAT_DE[c]))));
+        const radius = s.chat === "radius" ? h("input", { type: "number", min: 1, max: 9999, value: s.radius, class: "radius", disabled: !edit || null, "aria-label": T("Umkreis in Blöcken") }) : null;
+        radius?.addEventListener("change", () => save(s.server, "chat.radius", radius.value));
+        const link = s.bus ? h("span", { class: "pill ok" }, T("Mod am Bus")) : s.rcon ? h("span", { class: "pill" }, T("über die Konsole")) : h("span", { class: "pill warn" }, T("ohne RCON"));
+        return h("tr", null,
+          h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(s.server) } }, s.server)),
+          h("td", null, net),
+          h("td", null, h("div", { class: "actions nowrap" }, chat, radius, radius ? h("span", { class: "dim small" }, T("Blöcke")) : null)),
+          h("td", null, sw("sync.joins", s.joins)),
+          h("td", null, sw("sync.tablist", s.tablist, true)),
+          h("td", null, sw("sync.lists", s.lists)),
+          h("td", null, sw("sync.players", s.players, true)),
+          h("td", null, link));
+      })))) : h("p", { class: "empty" }, T("Kein Minecraft-Server da.")));
+  };
+
+  const drawBus = d => {
+    const edit = can("config");
+    const port = h("input", { type: "text", value: d.busPort, placeholder: "25580", size: 6, inputmode: "numeric", disabled: !edit || null, "aria-label": T("Port des Busses") });
+    port.addEventListener("change", () => run(T("Gespeichert"), () => api("POST", "/launcher/config", { key: "bus.port", value: port.value.trim() })).then(load));
+    put(busEl, h("div", { class: "bus-line" },
+      h("span", { class: "pill " + (d.bus ? "ok" : "") }, d.bus ? T("Bus offen") : T("Bus aus")),
+      h("span", { class: "dim small" }, d.bus ? T("Nur im Container erreichbar, Mods melden sich mit dem Schlüssel aus bus.key.") : T("Ohne Bus gehen Chat und Beitritte über die Konsolen der Server.")),
+      h("label", { class: "check" }, h("span", { class: "dim small" }, "Port"), port)));
+  };
+
+  const load = async () => {
+    const d = await api("GET", "/network?n=300");
+    st.data = d;
+    if (!st.feed.length) st.feed = d.feed;
+    const mcs = d.servers.filter(s => s.minecraft);
+    put(mapBox, mcs.length ? (st.map = netMap(mcs)) : null);
+    st.sayForm?.fill(mcs);
+    drawFilter(mcs);
+    drawSettings(d);
+    drawBus(d);
+    drawFeed();
+  };
+  on("chat", e => {
+    st.feed.push(e);
+    if (st.feed.length > 600) st.feed.splice(0, 100);
+    st.map?.pulse(e.server, e.kind === "chat" ? "chat" : "joins");
+    if (st.filter === "*" || e.server === st.filter) {
+      const empty = feedEl.querySelector(".empty");
+      if (empty) empty.remove();
+      const stick = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight < 40;
+      feedEl.append(feedLine(e));
+      while (feedEl.children.length > 300) feedEl.firstChild.remove();
+      if (stick) feedEl.scrollTop = feedEl.scrollHeight;
+    }
+  });
+  let last = Date.now();
+  on("overview", () => { if (Date.now() - last > 30000 && !document.activeElement?.matches("input, select")) { last = Date.now(); load(); } });
+  load().catch(e => put(settings, h("p", { class: "error" }, e.message)));
+}
+
 // ---- history -----------------------------------------------------------------------------------------
 
 function pageHistory(main, rest) {
@@ -2107,15 +2373,30 @@ function newServerWizard() {
         port.addEventListener("input", () => { s.port = port.value.trim(); refresh(); });
         mem.addEventListener("change", () => { s.memory = mem.value; });
         eula.addEventListener("change", () => { s.eula = eula.checked; refresh(); });
+        const first = S.overview.servers[0];
+        const packed = s.kind === "neoforge" && S.overview.pack?.version;
+        if (s.samePack == null) s.samePack = !!packed;
+        const same = h("input", { type: "checkbox", checked: s.samePack || null });
+        same.addEventListener("change", () => { s.samePack = same.checked; });
+        const net = h("input", { type: "text", value: s.network || "", placeholder: T("allein"), list: "wiz-nets", maxlength: 24 });
+        const nets = h("datalist", { id: "wiz-nets" });
+        api("GET", "/network?n=0").then(d => put(nets, [...new Set(d.servers.map(x => x.network).filter(Boolean))].map(n => h("option", { value: n })))).catch(() => {});
+        net.addEventListener("input", () => { s.network = net.value.trim().toLowerCase(); });
+        const voice = h("input", { type: "text", value: s.voice || "", placeholder: T("leer: keiner"), inputmode: "numeric" });
+        voice.addEventListener("input", () => { s.voice = voice.value.trim(); });
         put(b, h("div", { class: "form-grid" },
           field(T("Name"), name, T("Kleinbuchstaben, Ziffern, - und _. Wird der Ordner servers/<name>.")),
           field(T("Port"), port, T("Ein freier Port, den dein Anbieter nach außen gibt (beim Panel eine Allocation). Belegt: ") + ([...used].join(", ") || "-")),
-          field(T("Arbeitsspeicher"), mem, T("Heap des Servers. Der Launcher prüft, ob alles zusammen passt."))),
+          field(T("Arbeitsspeicher"), mem, T("Heap des Servers. Der Launcher prüft, ob alles zusammen passt.")),
+          packed ? h("label", { class: "check" }, same, h("span", null, T("Gleiches Pack wie ") + first.name + T(": Mods und Configs werden verlinkt, ein Update gilt für beide"))) : null,
+          field(T("Netzwerk"), h("span", null, net, nets), T("Server mit dem gleichen Netzwerk teilen Chat, Beitritte und Listen. Was genau, stellst du unter Netzwerk ein.")),
+          field(T("Voice-Port"), voice, T("UDP-Port für Simple Voice Chat, falls die Mod drin ist."))),
           s.kind === "velocity" || s.kind === "custom" ? null : h("label", { class: "check eula" }, eula, h("span", null, T("Ich akzeptiere die "), h("a", { href: "https://aka.ms/MinecraftEULA", target: "_blank", rel: "noopener" }, "Minecraft EULA"), ".")));
       },
     }],
     finish: async s => {
-      await api("POST", "/servers", { name: s.name, kind: s.kind, version: s.version, port: s.port, memory: s.memory, share: s.share, eula: !!s.eula, start: true });
+      await api("POST", "/servers", { name: s.name, kind: s.kind, version: s.version, port: s.port, memory: s.memory, share: s.share, eula: !!s.eula, start: true,
+        samePack: !!s.samePack, network: s.network || "", transfers: !!s.network, voice: s.voice || "" });
       toast(T("Server angelegt"), s.name + ": " + (s.kind === "custom" ? T("Jar wird hochgeladen") : T("startet gleich")));
       await waitForServer(s.name);
       if (s.kind === "custom" && s.file) await uploadJar(s.name, s.file);
@@ -2347,7 +2628,7 @@ const VERBS = [
   { w: ["kill"], a: ["server"], say: a => T("Beende hart: ") + a[0], scope: "power",
     run: a => api("POST", "/servers/" + a[0] + "/power", { action: "kill" }) },
   { w: ["run"], a: ["server", "text"], say: a => a[0] + ": /" + a[1], scope: "command", run: a => mc(a[0], a[1]) },
-  { w: ["say"], a: ["text"], say: a => T("Sage: ") + a[0], scope: "players", run: a => mc(mainServer(), "say " + a[0]) },
+  { w: ["say"], a: ["text"], say: a => T("An alle Server: ") + a[0], scope: "players", run: a => api("POST", "/network/say", { text: a[0] }) },
   { w: ["msg"], a: ["player", "text"], say: a => T("Nachricht an ") + a[0], scope: "players", run: a => mc(onlineServer(a[0]), "tell " + a[0] + " " + a[1]) },
   { w: ["kick"], a: ["player", "text?"], say: a => T("Kicke ") + a[0], scope: "players", run: a => mc(onlineServer(a[0]), "kick " + a[0] + (a[1] ? " " + a[1] : "")) },
   { w: ["ban"], a: ["player", "text?"], say: a => T("Banne ") + a[0], scope: "players", run: a => mc(mainServer(), "ban " + a[0] + (a[1] ? " " + a[1] : "")) },

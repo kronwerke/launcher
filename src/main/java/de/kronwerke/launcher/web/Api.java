@@ -42,7 +42,8 @@ final class Api {
     /** Commands someone with only "players" may run. */
     static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
             "ban ", "pardon ");
-    static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args");
+    static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
+            "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label");
 
     private final Web web;
     private final Fleet fleet;
@@ -199,6 +200,26 @@ final class Api {
             case "access" -> {
                 accessRoute(r, p);
                 return;
+            }
+            case "network" -> {
+                if (p.length == 1) {
+                    need(r, "read");
+                    r.ok(Json.map("servers", fleet.network().state(), "bus", fleet.network().busOpen(),
+                            "busPort", web.cfg.get("bus.port"), "feed", fleet.network().feed((int) Math.min(500, Long.parseLong(r.q("n", "200"))))));
+                    return;
+                }
+                if (p[1].equals("say")) {
+                    post(m);
+                    Map<String, Object> b = r.body();
+                    String text = Json.str(b, "text", "").trim();
+                    List<String> to = new ArrayList<>();
+                    if (b.get("servers") instanceof List<?> l) for (Object o : l) to.add(String.valueOf(o));
+                    act(r, "players", "say", to.isEmpty() ? null : String.join(",", to), text, () -> {
+                        fleet.network().say(to, r.who.name(), text);
+                        return "sent";
+                    });
+                    return;
+                }
             }
             default -> {
                 // falls through to 404
@@ -483,7 +504,11 @@ final class Api {
                 if (cmd.isEmpty()) throw new IllegalArgumentException("the command is empty");
                 String c = cmd;
                 String scope = r.who.can("command") || PLAYER_COMMANDS.stream().noneMatch(c::startsWith) ? "command" : "players";
-                act(r, scope, "command", s.name(), c, () -> s.command(c));
+                act(r, scope, "command", s.name(), c, () -> {
+                    String answer = s.command(c);
+                    fleet.network().mirror(s, c);
+                    return answer;
+                });
             }
             case "power" -> {
                 post(m);
@@ -519,8 +544,23 @@ final class Api {
                         case "memory" -> {
                             if (!value.matches("[1-9][0-9]{0,2}G|[1-9][0-9]{2,5}M")) throw new IllegalArgumentException("like 20G or 8192M");
                         }
-                        case "autostart", "restart.on.crash" -> {
+                        case "autostart", "restart.on.crash", "sync.joins", "sync.tablist", "sync.lists", "sync.players" -> {
                             if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("true or false");
+                        }
+                        case "network" -> {
+                            if (!value.matches("[a-z0-9_-]{0,24}")) throw new IllegalArgumentException("lower case letters, digits, - and _, at most 24, or empty");
+                        }
+                        case "label" -> {
+                            if (!value.matches("[\\p{L}\\p{N} _.-]{0,24}")) throw new IllegalArgumentException("letters, digits, spaces, at most 24");
+                        }
+                        case "sync.chat" -> {
+                            if (!List.of("network", "server", "radius").contains(value)) throw new IllegalArgumentException("network, server or radius");
+                        }
+                        case "chat.radius" -> {
+                            if (!value.matches("[1-9][0-9]{0,3}")) throw new IllegalArgumentException("1 to 9999 blocks");
+                        }
+                        case "color" -> {
+                            if (!value.isEmpty() && !value.matches("#[0-9a-fA-F]{6}")) throw new IllegalArgumentException("like #e5b451, or empty");
                         }
                         case "cpu.share" -> {
                             fleet.share(s, Integer.parseInt(value));
@@ -531,6 +571,14 @@ final class Api {
                         }
                     }
                     s.config().set(key, value);
+                    if (de.kronwerke.launcher.Network.KEYS.contains(key) || key.equals("color")) fleet.network().changed();
+                    if (key.equals("network") || key.equals("sync.lists")) fleet.submit(() -> {
+                        try {
+                            fleet.linkLists(s);
+                        } catch (IOException ignored) {
+                            // links on the next start
+                        }
+                    });
                     return key.equals("memory") || key.equals("jvm.args") ? "saved, applies on the next start" : "saved";
                 });
             }
@@ -731,10 +779,29 @@ final class Api {
             v.put("memory", Json.str(b, "memory", "4G"));
             v.put("cpu.share", Long.toString(Math.max(1, Json.num(b, "share", 3))));
             v.put("order", Integer.toString(order));
-            v.put("share", "-");
+            boolean samePack = Json.bool(b, "samePack", false) && kind.equals("neoforge");
+            if (!samePack) v.put("share", "-");
+            String net = Json.str(b, "network", "").trim();
+            if (!net.matches("[a-z0-9_-]{0,24}")) throw new IllegalArgumentException("network: lower case letters, digits, - and _");
+            if (!net.isEmpty()) v.put("network", net);
+            if (Json.bool(b, "transfers", false)) v.put("transfers", "true");
+            String voice = Json.str(b, "voice", "").trim();
+            if (!voice.isEmpty()) {
+                if (!voice.matches("[0-9]{2,5}") || usedPorts().contains(voice) || voice.equals(port)) throw new IllegalArgumentException("voice port taken or wrong");
+                v.put("voice.port", voice);
+            }
+            String role = Json.str(b, "role", "").trim();
+            if (!role.isEmpty()) {
+                if (!role.matches("[a-z0-9_-]{1,24}")) throw new IllegalArgumentException("role: lower case letters and digits");
+                v.put("role", role);
+            }
             Path dir = fleet.root().resolve("servers").resolve(name);
             var cfg = de.kronwerke.launcher.Config.createServer(fleet.root(), name, v);
-            if (!kind.equals("custom")) {
+            if (samePack) {
+                // NeoForge and every mod from the first server's pack, nothing to download here
+                cfg.set("type", "neoforge");
+                cfg.set("loader", "neoforge");
+            } else if (!kind.equals("custom")) {
                 for (var e : software.install(kind, version, dir).entrySet()) cfg.set(e.getKey(), e.getValue());
             }
             if (Json.bool(b, "eula", false)) {
@@ -904,6 +971,15 @@ final class Api {
             }
             case "config" -> {
                 String key = Json.str(b, "key", ""), value = Json.str(b, "value", "");
+                if (key.equals("bus.port")) {
+                    if (!value.isEmpty() && (!value.matches("[0-9]{4,5}") || usedPorts().contains(value))) throw new IllegalArgumentException("a free port, or empty");
+                    act(r, "config", "config", null, key + "=" + value, () -> {
+                        fleet.config().set(key, value);
+                        fleet.network().reopen();
+                        return "saved; servers connect after their next start";
+                    });
+                    return;
+                }
                 if (!Set.of("cpu.pin", "cpu.balance").contains(key)) throw new IllegalArgumentException("not a key the console changes: " + key);
                 if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("true or false");
                 act(r, "config", "config", null, key + "=" + value, () -> {
@@ -1010,6 +1086,9 @@ final class Api {
         Consumer<Map<String, Object>> ev = e -> q.offer(frame("event", e));
         fleet.onEvent(ev);
         undo.add(() -> fleet.removeEvent(ev));
+        Consumer<Map<String, Object>> chat = e -> q.offer(frame("chat", e));
+        fleet.network().onFeed(chat);
+        undo.add(() -> fleet.network().removeFeed(chat));
         Runnable closer = () -> q.offer("");
         synchronized (closers) {
             closers.add(closer);

@@ -181,6 +181,7 @@ public final class Server {
             }
         }
         watch(line);
+        fleet.network().line(this, line);
     }
 
     void note(String msg) {

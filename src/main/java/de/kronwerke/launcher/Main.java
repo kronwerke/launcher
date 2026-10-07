@@ -116,12 +116,14 @@ public final class Main {
             if (sp < 0) throw new IllegalArgumentException("@name command");
             Server s = fleet.server(t.substring(1, sp));
             if (!s.send(t.substring(sp + 1))) s.note("Not running; `launcher start " + s.name() + "` starts it");
+            else fleet.network().mirror(s, t.substring(sp + 1));
             return;
         }
         boolean ours = t.equals("launcher") || t.startsWith("launcher ") || t.equals("kronwerke") || t.startsWith("kronwerke ");
         if (!ours) {
             Server s = fleet.main();
             if (!s.send(line)) s.note("Minecraft is not running; `launcher start` starts it");
+            else fleet.network().mirror(s, line);
             return;
         }
         String[] a = t.split("\\s+");

@@ -32,6 +32,7 @@ Written for [Kronwerke](https://kronwerke.com), a modded Minecraft server for st
 - **Crashes handled.** A crashed server starts again after 15 seconds; three crashes in ten minutes and it waits for a person.
 - **CPU and memory.** Each server has a CPU share; with pinning on, each gets its share of the container's CPUs, and the shares can move by themselves to a server whose tick time suffers. A start that would not fit into memory is refused.
 - **Watching.** Every ten seconds: CPU, memory, tick time per dimension and players of every server, kept for an hour.
+- **Networks.** Servers that belong together share chat, joins and leaves, whitelist and bans, with any server software and no mod. A mod on the launcher's bus adds the tab list, chat within a radius and player data that travels between servers.
 - **Modpacks.** A packwiz pack is installed before a start with an update: every server stops, the pack updates once, they start again in order.
 - **Install from the browser.** Paper, Purpur, Folia, Fabric, NeoForge, Vanilla, Velocity or your own jar, with a wizard for new servers and one to change a server's software.
 - **Mods and plugins.** Every jar matched against Modrinth and CurseForge, with updates, search, install with dependencies and removal.
@@ -85,6 +86,7 @@ In the panel's console, besides the first server's own commands:
 | `web.Web`, `web.Api` | The console page and its JSON API |
 | `web.Access`, `web.Tls` | Passkeys, sessions, invites, keys; certificates and the client certificate check |
 | `Link` | The optional outbound connection to a controller |
+| `Network` | Networks of servers: the bridge over the consoles, the bus for mods, shared lists |
 | `ServerFiles`, `Rcon`, `Proc`, `Metrics`, `Updater` | Files with keys hidden, RCON, what Linux says, the samples, releases |
 | `Config`, `Home`, `Json` | Properties files, where they live, just enough JSON. No dependencies at all |
 
@@ -98,6 +100,7 @@ Early, but in daily use: Kronwerke runs on it since September 2026. Tested with 
 | --- | --- |
 | [docs/SETUP.md](docs/SETUP.md) | On a game panel, more servers, every setting |
 | [docs/CONSOLE.md](docs/CONSOLE.md) | The console: Cloudflare, first passkey, people, keys, the API |
+| [docs/BUS.md](docs/BUS.md) | Networks: what servers share, the bridge, the bus and its protocol for mods |
 | [docs/KRONWERKE.md](docs/KRONWERKE.md) | How Kronwerke uses it: a mining server, moving players between servers |
 | [CHANGELOG.md](CHANGELOG.md) | What changed per version |
 

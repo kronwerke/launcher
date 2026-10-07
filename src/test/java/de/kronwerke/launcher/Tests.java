@@ -27,6 +27,7 @@ public final class Tests {
         answersFromMinecraft();
         propertiesKeepTheRest();
         bootPicksTheCurrentJar();
+        networkReadsConsoles();
         passed += de.kronwerke.launcher.web.AccessTests.run();
         System.out.println(passed + " checks passed");
     }
@@ -233,5 +234,27 @@ public final class Tests {
         check(dir.resolve("launcher-abc.jar").equals(de.kronwerke.boot.Boot.chosenJarFor(dir)), "the named jar");
         Files.writeString(dir.resolve("current"), "../../etc/passwd\n");
         check(de.kronwerke.boot.Boot.chosenJarFor(dir) == null, "nothing outside the folder");
+    }
+
+    static void networkReadsConsoles() throws IOException {
+        java.util.regex.Matcher m = Network.CHAT.matcher("[12:00:01] [Server thread/INFO] [minecraft/MinecraftServer]: <Elchi_Sam> hallo du");
+        check(m.find() && m.group(1).equals("Elchi_Sam") && m.group(2).equals("hallo du"), "NeoForge chat line");
+        check(Network.CHAT.matcher("[12:00:01 INFO]: [Not Secure] <Notch> hi").find(), "Paper unsigned chat line");
+        check(!Network.CHAT.matcher("[12:00:01] [Server thread/INFO]: [Rcon] tellraw @a <x> y").find(), "the bridge's own tellraw is not chat");
+        check(!Network.CHAT.matcher("[12:00:01] [Server thread/INFO]: [main] <Elchi_Sam> hi").find(), "a relayed line is not chat again");
+        m = Network.JOIN.matcher("[12:00:01] [Server thread/INFO] [minecraft/MinecraftServer]: KwTester joined the game");
+        check(m.find() && m.group(1).equals("KwTester"), "join line");
+        check(Network.LEAVE.matcher("[12:00:01] [Server thread/INFO]: KwTester left the game").find(), "leave line");
+        String t = Network.tellraw(Json.map("op", "chat", "label", "Mine", "color", "#7fd0c8", "player", "A\"b", "text", "x"));
+        check(Json.parse(t) instanceof List<?> l && l.size() == 3, "tellraw is a JSON list: " + t);
+        check(Network.tellraw(Json.map("op", "message")) == null, "only mods understand their own messages");
+        Path dir = Files.createTempDirectory("net");
+        Config c = Config.load(dir.resolve("s.properties"), Config.serverTemplate("jar", "", ".", "", "", "", "1G", "1", "true", "10", "x"));
+        Network.Policy p = Network.Policy.of(c);
+        check(!p.inNetwork() && p.chat().equals("network") && p.joins() && p.tablist() && p.lists() && !p.players() && p.radius() == 100, "defaults: " + p);
+        c.set("sync.chat", "nonsense");
+        c.set("network", "kw");
+        check(Network.Policy.of(c).chat().equals("network") && Network.Policy.of(c).inNetwork(), "unknown chat mode falls back");
+        check(Network.mac("k".getBytes(StandardCharsets.UTF_8), "n:main").length() == 64, "HMAC-SHA256 in hex");
     }
 }

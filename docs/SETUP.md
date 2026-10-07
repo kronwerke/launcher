@@ -70,6 +70,8 @@ order=20
 
 Each server needs its own game port, a RCON port of its own (loopback only), and an allocation on the panel for every port players connect to.
 
+`network=kronwerke` in two servers' files (or on the console's Network page) makes them share chat, joins and the whitelist; see [BUS.md](BUS.md).
+
 ## The console
 
 1. In `launcher/launcher.properties`: `name` (shown in the console's title), `console.port` (an allocation), `console.host` (the name it is reached by), `console.language` (`en` or `de`).
@@ -105,7 +107,7 @@ The key stays in `launcher/link.key`; the controller keeps only its hash.
 | `link.url`, `link.name` | empty | The optional controller |
 | `console.*` | | See [CONSOLE.md](CONSOLE.md) |
 | `update.repo` | `kronwerke/launcher` | GitHub repository launcher updates come from |
-| `bus.port` | empty | A loopback port mods may connect to (Kronwerke Core does) |
+| `bus.port` | empty | A loopback port mods of a network connect to (Kronwerke Core does); see [BUS.md](BUS.md) |
 | `cpu.pin`, `cpu.balance` | `false` | CPU shares as hard limits, and moving them by load |
 | `container.memory` | empty | GB the servers may use together; empty reads the container's limit |
 
@@ -123,6 +125,7 @@ Per server, in `launcher/servers/<name>.properties`:
 | `cpu.share` | Share of the CPUs; applies at once |
 | `autostart`, `restart.on.crash`, `order` | Starting with the launcher, after crashes, in which order |
 | `role` | Passed to the server as `-Dlauncher.role` |
-| `color` | Its colour in the console |
+| `color`, `label` | Its colour in the console and in front of its chat on the others; its name there |
+| `network`, `sync.*`, `chat.radius` | Which servers it shares chat, joins, lists, the tab list and player data with; see [BUS.md](BUS.md) |
 
 Java servers also get `-Dlauncher.server=<name>`, and with `bus.port` set `-Dlauncher.bus` and `-Dlauncher.bus.key`.

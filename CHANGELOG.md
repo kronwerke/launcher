@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+Networks: servers that belong together share chat, joins, lists and, with a mod, the tab list and player data. Details in [docs/BUS.md](docs/BUS.md).
+
+- `network=` in a server's file puts it into a network; `sync.chat` (`network`, `server`, `radius` with `chat.radius`), `sync.joins`, `sync.tablist`, `sync.lists`, `sync.players` say what it shares, `label` how the others name it.
+- The bridge: chat and joins of any Minecraft server, read from its console and shown on the other servers with `tellraw`, no mod needed. Joins and leaves in each player's own language.
+- The bus (`bus.port`, loopback only): mods sign in with an HMAC over a nonce and the key in `bus.key`, report chat, joins and players, get the others' players for their tab list, and send their own messages to the other servers. A mod on the bus takes over from the bridge for its server.
+- Lists: a server of a network links the first one's whitelist, every server reads it again when it changes, and `ban`, `pardon`, `op`, `deop`, `whitelist add|remove` from any console run on all of them.
+- A new server in a network starts with the first server's `server.properties`, with its own world, ports and RCON.
+- The console's Network page: a map of the networks where every message travels as a light, the chat of every server live with a filter, writing to the players of one or all servers, every setting, the bus and its port. `say` in the command line writes to every server.
+- The new server wizard: same pack as the first server (mods and configs linked), network, Simple Voice Chat port.
+- Colours without a setting follow the start order, not the server's name.
+
 ## 0.4.0
 
 - The palette (Ctrl K) is a command line too: `start|stop|restart|kill [server]`, `run <server> <command>`, `/command`, `@server command`, `say`, `msg`, `kick`, `ban`, `pardon`, `op`, `deop`, `whitelist add|remove`, with Kronwerke Core `streamer add|remove`, `slots`, `bonus`, `invite`, `revoke`, and `pack update`, `reload`, `wait`, `go`, `open`, `console`, `new server`. Chains with `&&` (stop at an error) and `;` (carry on), Tab completes verbs, servers, players, streamers and pages, `help` lists everything, Alt and the arrow keys walk the history. Each step reports back in the palette.
