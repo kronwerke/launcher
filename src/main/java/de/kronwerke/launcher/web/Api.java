@@ -860,6 +860,20 @@ final class Api {
                 });
             }
             case "backups" -> backupsRoute(r, s, sub);
+            case "reset" -> {
+                post(m);
+                if (s == fleet.main()) throw new IllegalArgumentException("the first server's world is not reset from here");
+                act(r, "power", "reset world", s.name(), "", () -> {
+                    fleet.submit(() -> {
+                        try {
+                            fleet.backups().reset(s);
+                        } catch (RuntimeException ignored) {
+                            // in the timeline
+                        }
+                    });
+                    return "resetting";
+                });
+            }
             case "maintenance" -> {
                 post(m);
                 Map<String, Object> b = r.body();
@@ -1210,6 +1224,16 @@ final class Api {
                         fleet.config().set(key, value);
                         fleet.network().reopen();
                         return "saved; servers connect after their next start";
+                    });
+                    return;
+                }
+                if (key.equals("public.host") || key.equals("timezone")) {
+                    if (key.equals("public.host") && !value.matches("[A-Za-z0-9.-]{0,253}")) throw new IllegalArgumentException("a host name like play.example.com");
+                    if (key.equals("timezone") && !value.isEmpty()) java.time.ZoneId.of(value);
+                    act(r, "config", "config", null, key + "=" + value, () -> {
+                        fleet.config().set(key, value);
+                        fleet.network().changed();
+                        return "saved";
                     });
                     return;
                 }

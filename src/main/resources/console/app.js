@@ -815,7 +815,18 @@ const EN = {
   "Ab so vielen Bytes komprimieren": "Compress from this many bytes",
   "Vom Launcher gesetzt (port in seiner Datei)": "Set by the launcher (port in its file)",
   "Vom Launcher gesetzt": "Set by the launcher",
-  "Vom Launcher gesetzt (transfers)": "Set by the launcher (transfers)"
+  "Vom Launcher gesetzt (transfers)": "Set by the launcher (transfers)",
+  "Welt zurücksetzen": "Reset the world",
+  "Welt zurückgesetzt": "World reset",
+  " Tage um ": " days at ",
+  "Alle paar Tage": "Every few days",
+  "Alle ... Tage": "Every ... days",
+  "Zum ersten Mal am": "First on",
+  " zurücksetzen?": "?",
+  "Alle Spieler werden vorher in die andere Welt geschickt. Die alte Welt wird beiseitegelegt, die davor gelöscht. Tippe den Namen zur Bestätigung.": "Every player is sent to the other world first. The old world is moved aside, the one before it is deleted. Type the name to confirm.",
+  "Zurücksetzen": "Reset",
+  "Welt wird zurückgesetzt": "The world is being reset",
+  "Welt zurücksetzen: ": "Reset the world: "
   };
 function T(s) {
   if (s == null) return s;
@@ -2369,12 +2380,13 @@ function pageNetwork(main) {
 
 // ---- automation: schedule and alerts ------------------------------------------------------------------
 
-const ACTION_DE = { restart: "Neustart", stop: "Stoppen", start: "Starten", command: "Befehl", say: "Nachricht", backup: "Backup" };
+const ACTION_DE = { restart: "Neustart", stop: "Stoppen", start: "Starten", command: "Befehl", say: "Nachricht", backup: "Backup", reset: "Welt zurücksetzen" };
 const DAY_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const ALERT_DE = { crash: "Absturz", down: "Aufgegeben (drei Abstürze)", mspt: "Tick-Zeit dauerhaft hoch", backup: "Backup fertig", "backup-failed": "Backup fehlgeschlagen", start: "Server läuft", stop: "Server gestoppt" };
+const ALERT_DE = { reset: "Welt zurückgesetzt", crash: "Absturz", down: "Aufgegeben (drei Abstürze)", mspt: "Tick-Zeit dauerhaft hoch", backup: "Backup fertig", "backup-failed": "Backup fehlgeschlagen", start: "Server läuft", stop: "Server gestoppt" };
 
 function whenText(t) {
   if (t.kind === "every") return T("alle ") + t.hours + T(" Stunden");
+  if (t.kind === "days") return T("alle ") + t.every + T(" Tage um ") + t.time;
   const days = (t.days || []).map(Number);
   const d = days.length === 7 ? T("täglich") : days.join() === "1,2,3,4,5" ? T("werktags") : days.map(n => T(DAY_DE[n - 1])).join(", ");
   return d + T(" um ") + t.time;
@@ -2387,7 +2399,10 @@ function taskDialog(task, onSaved) {
   const action = h("select", null, Object.keys(ACTION_DE).map(a => h("option", { value: a, selected: a === t.action || null }, T(ACTION_DE[a]))));
   const server = h("select", null, h("option", { value: "*" }, T("Alle Server")), servers.map(x => h("option", { value: x.name, selected: x.name === t.server || null }, x.name)));
   const text = h("input", { type: "text", value: t.text, maxlength: 256 });
-  const kind = h("select", null, h("option", { value: "daily", selected: t.kind === "daily" || null }, T("Zu einer Uhrzeit")), h("option", { value: "every", selected: t.kind === "every" || null }, T("Alle paar Stunden")));
+  const kind = h("select", null, h("option", { value: "daily", selected: t.kind === "daily" || null }, T("Zu einer Uhrzeit")), h("option", { value: "every", selected: t.kind === "every" || null }, T("Alle paar Stunden")),
+    h("option", { value: "days", selected: t.kind === "days" || null }, T("Alle paar Tage")));
+  const everyDays = h("input", { type: "number", min: 2, max: 30, value: t.every || 3 });
+  const fromDay = h("input", { type: "date", value: t.from || new Date().toISOString().slice(0, 10) });
   const time = h("input", { type: "time", value: t.time || "05:00" });
   const hours = h("select", null, [1, 2, 3, 4, 6, 8, 12, 24].map(n => h("option", { value: n, selected: n === +t.hours || null }, n + " h")));
   const days = h("div", { class: "seg small", role: "group", "aria-label": T("Wochentage") }, DAY_DE.map((d, i) => {
@@ -2399,13 +2414,17 @@ function taskDialog(task, onSaved) {
   const field = (label, input, hint) => h("label", { class: "field" }, h("span", null, label), input, hint ? h("small", { class: "dim" }, hint) : null);
   const textField = field(T("Text"), text, T("Der Befehl ohne / oder die Nachricht an die Spieler."));
   const warnField = field(T("Vorwarnung"), warn, T("Minuten vorher, mit Komma. Die Spieler sehen: Neustart in 5 Minuten."));
-  const dailyBox = h("div", { class: "stack" }, field(T("Uhrzeit"), time), h("div", { class: "field" }, h("span", null, T("Tage")), days));
+  const dailyBox = h("div", { class: "stack" }, h("div", { class: "field" }, h("span", null, T("Tage")), days));
   const everyBox = field(T("Abstand"), hours, T("Ab Mitternacht gezählt: 6 h heißt 0, 6, 12 und 18 Uhr."));
+  const daysBox = h("div", { class: "grid-two" }, field(T("Alle ... Tage"), everyDays), field(T("Zum ersten Mal am"), fromDay));
+  const timeField = field(T("Uhrzeit"), time);
   const sync = () => {
     textField.hidden = !["command", "say"].includes(action.value);
-    warnField.hidden = !["restart", "stop"].includes(action.value);
+    warnField.hidden = !["restart", "stop", "reset"].includes(action.value);
     dailyBox.hidden = kind.value !== "daily";
     everyBox.hidden = kind.value !== "every";
+    daysBox.hidden = kind.value !== "days";
+    timeField.hidden = kind.value === "every";
   };
   action.addEventListener("change", sync); kind.addEventListener("change", sync); sync();
   const err = h("p", { class: "error", role: "alert" });
@@ -2413,12 +2432,13 @@ function taskDialog(task, onSaved) {
     e.preventDefault();
     const body = { id: t.id, name: name.value.trim(), action: action.value, server: server.value, text: text.value.trim(), kind: kind.value, time: time.value,
       hours: +hours.value, days: $$("button", days).map((b, i) => b.getAttribute("aria-pressed") === "true" ? i + 1 : 0).filter(Boolean),
-      warn: ["restart", "stop"].includes(action.value) ? warn.value.split(/[ ,;]+/).filter(Boolean).map(Number) : [], enabled: t.enabled };
+      warn: ["restart", "stop", "reset"].includes(action.value) ? warn.value.split(/[ ,;]+/).filter(Boolean).map(Number) : [], enabled: t.enabled,
+      every: +everyDays.value, from: fromDay.value };
     try { await api("POST", "/schedule", body); d.close(); toast(T("Gespeichert"), body.name); onSaved(); } catch (x) { err.textContent = x.message; }
   } },
     h("h2", null, task ? T("Aufgabe ändern") : T("Neue Aufgabe")),
     field(T("Name"), name), h("div", { class: "grid-two" }, field(T("Was"), action), field(T("Wo"), server)), textField,
-    field(T("Wann"), kind), dailyBox, everyBox, warnField, err,
+    field(T("Wann"), kind), timeField, dailyBox, everyBox, daysBox, warnField, err,
     h("div", { class: "actions" }, h("span", { style: { flex: "1" } }), h("button", { class: "btn quiet", type: "button", onclick: () => d.close() }, T("Abbrechen")), h("button", { class: "btn primary", type: "submit" }, T("Speichern")))));
   d.addEventListener("close", () => d.remove());
   document.body.append(d);
@@ -2443,7 +2463,7 @@ function pageAutomation(main) {
     put(tasksEl, d.tasks.length ? h("table", null,
       h("thead", null, h("tr", null, h("th", null, T("Aufgabe")), h("th", null, T("Wann")), h("th", { class: "hide-s" }, T("Nächstes Mal")), h("th", null, T("An")), h("th"))),
       h("tbody", null, d.tasks.map(t => h("tr", null,
-        h("td", null, h("b", null, t.name), h("div", { class: "dim small" }, T(ACTION_DE[t.action]) + (t.server === "*" ? T(" auf allen Servern") : T(" auf ") + t.server) + (t.text ? ": " + t.text : "") + (t.warn?.length && ["restart", "stop"].includes(t.action) ? T(", warnt ") + t.warn.join(", ") + " min" : ""))),
+        h("td", null, h("b", null, t.name), h("div", { class: "dim small" }, T(ACTION_DE[t.action]) + (t.server === "*" ? T(" auf allen Servern") : T(" auf ") + t.server) + (t.text ? ": " + t.text : "") + (t.warn?.length && ["restart", "stop", "reset"].includes(t.action) ? T(", warnt ") + t.warn.join(", ") + " min" : ""))),
         h("td", null, whenText(t)),
         h("td", { class: "hide-s num" }, t.next ? fmt.date(t.next) : "-", t.last ? h("div", { class: "dim small" }, T("zuletzt ") + fmt.date(t.last)) : null),
         h("td", null, h("input", { type: "checkbox", class: "switch", checked: t.enabled || null, disabled: !can("config") || null, "aria-label": T("An oder aus"),
@@ -2875,8 +2895,13 @@ function backupPanel(s) {
   };
   make.addEventListener("click", async () => { await run(T("Backup gestartet"), () => api("POST", "/servers/" + s.name + "/backups", {})); setTimeout(draw, 800); });
   draw();
+  const resetBtn = s.name !== S.overview.servers[0].name && can("power") ? h("button", { class: "btn danger", onclick: async () => {
+    const n = await confirmDialog({ title: T("Welt zurücksetzen: ") + s.name + "?", text: T("Alle Spieler werden vorher in die andere Welt geschickt. Die alte Welt wird beiseitegelegt, die davor gelöscht. Tippe den Namen zur Bestätigung."), ok: T("Zurücksetzen"), danger: true, input: { label: T("Name"), required: true } });
+    if (n !== s.name) return n && toast(T("Name stimmt nicht"), "", true);
+    run(T("Welt wird zurückgesetzt"), () => api("POST", "/servers/" + s.name + "/reset", {}));
+  } }, T("Welt zurücksetzen")) : null;
   return h("section", { class: "panel" },
-    h("header", null, h("div", null, h("h2", null, "Backups"), h("p", null, T("Die Welt als Zip, die neuesten bleiben (backup.keep)."))), make),
+    h("header", null, h("div", null, h("h2", null, "Backups"), h("p", null, T("Die Welt als Zip, die neuesten bleiben (backup.keep)."))), h("div", { class: "actions" }, resetBtn, make)),
     list);
 }
 

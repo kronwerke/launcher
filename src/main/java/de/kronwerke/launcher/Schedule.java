@@ -21,7 +21,7 @@ import java.util.UUID;
  * Restarts and stops warn the players at the given minutes before.
  */
 public final class Schedule {
-    public static final List<String> ACTIONS = List.of("restart", "stop", "start", "command", "say", "backup");
+    public static final List<String> ACTIONS = List.of("restart", "stop", "start", "command", "say", "backup", "reset");
 
     private final Fleet fleet;
     private final Path file;
@@ -92,6 +92,10 @@ public final class Schedule {
         t.put("action", action);
         String server = Json.str(in, "server", "*");
         if (!server.equals("*")) fleet.server(server);
+        if (action.equals("reset")) {
+            if (server.equals("*")) throw new IllegalArgumentException("a world reset is for one server, not all");
+            if (fleet.server(server) == fleet.main()) throw new IllegalArgumentException("the first server's world is never reset by the clock");
+        }
         t.put("server", server);
         String text = Json.str(in, "text", "").trim();
         if ((action.equals("command") || action.equals("say")) && text.isEmpty()) throw new IllegalArgumentException("this needs a text");
@@ -114,14 +118,28 @@ public final class Schedule {
             long hours = Json.num(in, "hours", 0);
             if (hours < 1 || hours > 24 || 24 % hours != 0) throw new IllegalArgumentException("every 1, 2, 3, 4, 6, 8, 12 or 24 hours");
             t.put("hours", hours);
+        } else if (kind.equals("days")) {
+            String time = Json.str(in, "time", "");
+            if (!time.matches("([01][0-9]|2[0-3]):[0-5][0-9]")) throw new IllegalArgumentException("time like 05:00");
+            long every = Json.num(in, "every", 0);
+            if (every < 2 || every > 30) throw new IllegalArgumentException("every 2 to 30 days");
+            String from = Json.str(in, "from", LocalDate.now(zone()).toString());
+            try {
+                LocalDate.parse(from);
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException("from: a date like 2026-10-08");
+            }
+            t.put("time", time);
+            t.put("every", every);
+            t.put("from", from);
         } else {
-            throw new IllegalArgumentException("kind: daily or every");
+            throw new IllegalArgumentException("kind: daily, every or days");
         }
         t.put("kind", kind);
         List<Object> warn = new ArrayList<>();
         if (in.get("warn") instanceof List<?> l) for (Object w : l) {
             long n = ((Number) w).longValue();
-            if (n < 1 || n > 60) throw new IllegalArgumentException("warnings 1 to 60 minutes before");
+            if (n < 1 || n > 1440) throw new IllegalArgumentException("warnings 1 to 1440 minutes before");
             warn.add(n);
         }
         warn.sort((a, b) -> Long.compare((Long) b, (Long) a));
@@ -148,6 +166,18 @@ public final class Schedule {
             return at;
         }
         LocalTime time = LocalTime.parse(Json.str(t, "time", "05:00"));
+        if ("days".equals(t.get("kind"))) {
+            // every n days at a time, counted from a first day
+            long every = Math.max(1, Json.num(t, "every", 3));
+            LocalDate from = LocalDate.parse(Json.str(t, "from", now.toLocalDate().toString()));
+            LocalDate d = now.toLocalDate();
+            if (d.isBefore(from)) d = from;
+            long off = java.time.temporal.ChronoUnit.DAYS.between(from, d) % every;
+            if (off != 0) d = d.plusDays(every - off);
+            ZonedDateTime at = d.atTime(time).atZone(now.getZone());
+            if (!at.isAfter(now)) at = d.plusDays(every).atTime(time).atZone(now.getZone());
+            return at;
+        }
         List<?> days = t.get("days") instanceof List<?> l ? l : List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L);
         for (int k = 0; k <= 7; k++) {
             LocalDate d = now.toLocalDate().plusDays(k);
@@ -213,11 +243,20 @@ public final class Schedule {
 
     private void warn(Map<String, Object> t, long minutes) {
         String action = Json.str(t, "action", "");
-        if (!action.equals("restart") && !action.equals("stop")) return;
+        if (!action.equals("restart") && !action.equals("stop") && !action.equals("reset")) return;
         boolean de = fleet.config().get("console.language").equals("de");
-        String text = de
-                ? (action.equals("restart") ? "Neustart" : "Der Server stoppt") + " in " + minutes + (minutes == 1 ? " Minute" : " Minuten")
-                : (action.equals("restart") ? "Restart" : "The server stops") + " in " + minutes + (minutes == 1 ? " minute" : " minutes");
+        String when = minutes >= 120 && minutes % 60 == 0 ? (minutes / 60) + (de ? " Stunden" : " hours")
+                : minutes + (de ? (minutes == 1 ? " Minute" : " Minuten") : (minutes == 1 ? " minute" : " minutes"));
+        String what = switch (action) {
+            case "restart" -> de ? "Neustart" : "Restart";
+            case "stop" -> de ? "Der Server stoppt" : "The server stops";
+            default -> {
+                List<Server> ts = targets(t);
+                String label = ts.isEmpty() ? "" : Network.label(ts.get(0));
+                yield de ? label + " wird zurückgesetzt" : label + " is reset";
+            }
+        };
+        String text = what + (de ? " in " : " in ") + when;
         List<String> names = new ArrayList<>();
         for (Server s : targets(t)) if (s.minecraft() && s.state() == Server.State.RUNNING) names.add(s.name());
         if (names.isEmpty()) return;
@@ -251,6 +290,9 @@ public final class Schedule {
                 for (Server s : targets) if (s.minecraft() && s.state() == Server.State.RUNNING) names.add(s.name());
                 if (!names.isEmpty()) fleet.network().say(names, fleet.config().get("name").isEmpty() ? "Server" : fleet.config().get("name"), text);
             }
+            case "reset" -> targets.forEach(s -> {
+                if (s != fleet.main()) fleet.submit(() -> fleet.backups().reset(s));
+            });
             case "backup" -> targets.forEach(s -> {
                 if (s.minecraft()) fleet.submit(() -> fleet.backups().run(s, Json.str(t, "name", "schedule")));
             });
@@ -266,6 +308,19 @@ public final class Schedule {
                 // last run is only a note
             }
         }
+    }
+
+    /** When the world of a server is reset next by the clock, or null. */
+    public java.time.ZonedDateTime nextReset(String server) {
+        ZonedDateTime now = ZonedDateTime.now(zone()), best = null;
+        synchronized (this) {
+            for (Map<String, Object> t : tasks) {
+                if (!"reset".equals(t.get("action")) || !server.equals(t.get("server"))) continue;
+                ZonedDateTime n = next(t, now);
+                if (n != null && (best == null || n.isBefore(best))) best = n;
+            }
+        }
+        return best;
     }
 
     public synchronized Map<String, Object> get(String id) {

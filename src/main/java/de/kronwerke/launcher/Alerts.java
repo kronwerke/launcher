@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * secret and stays in console/alerts.json.
  */
 public final class Alerts {
-    public static final List<String> KINDS = List.of("crash", "down", "mspt", "backup", "backup-failed", "start", "stop");
+    public static final List<String> KINDS = List.of("crash", "down", "mspt", "backup", "backup-failed", "start", "stop", "reset");
 
     private final Fleet fleet;
     private final Path file;

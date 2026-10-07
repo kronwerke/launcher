@@ -270,5 +270,9 @@ public final class Tests {
         check(Schedule.next(every, now).getHour() == 6, "every 6 h: 6 o'clock next");
         check(Schedule.next(every, now.withHour(23)).getHour() == 0, "every 6 h: midnight after 23");
         check(Schedule.next(Json.map("kind", "every", "hours", 6L, "enabled", false), now) == null, "off: never");
+        Map<String, Object> three = Json.map("kind", "days", "every", 3L, "from", "2026-10-08", "time", "05:00", "enabled", true);
+        check(Schedule.next(three, now).getDayOfMonth() == 8, "every 3 days: the first day");
+        check(Schedule.next(three, now.withDayOfMonth(8).withHour(6)).getDayOfMonth() == 11, "every 3 days: three days on");
+        check(Schedule.next(three, now.withDayOfMonth(12)).getDayOfMonth() == 14, "every 3 days: counted from the first day");
     }
 }

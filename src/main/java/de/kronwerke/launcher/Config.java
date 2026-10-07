@@ -98,6 +98,10 @@ public final class Config {
             # container's (usually UTC).
             timezone=
 
+            # The address players connect to (kronwerke.net, say). Mods that move players between
+            # servers send them to this host and the target server's port.
+            public.host=
+
             # The disk quota in GB, for the console's bar (panels do not tell it). Empty shows only
             # what is used.
             container.disk=

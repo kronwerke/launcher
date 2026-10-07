@@ -577,11 +577,54 @@ public final class Network {
         Map<String, Object> others = new LinkedHashMap<>();
         for (Server o : mates(s)) {
             mates.add(Json.map("name", o.name(), "label", label(o), "color", color(o), "bus", onBus(o.name()),
-                    "running", o.state() == Server.State.RUNNING, "policy", policy(o).json()));
+                    "running", o.state() == Server.State.RUNNING, "policy", policy(o).json(),
+                    "role", role(o), "host", fleet.config().get("public.host"), "port", port(o)));
             if (policy(o).tablist()) others.put(o.name(), players(o.name()));
         }
+        java.time.ZonedDateTime reset = fleet.schedule().nextReset(s.name());
         return Json.map("op", op, "server", s.name(), "label", label(s), "color", color(s), "policy", policy(s).json(),
-                "peers", mates, "players", others);
+                "peers", mates, "players", others, "role", role(s), "host", fleet.config().get("public.host"), "port", port(s),
+                "reset", reset == null ? null : reset.toInstant().toString());
+    }
+
+    static String role(Server s) {
+        return s.config().get("role").isEmpty() ? s.name() : s.config().get("role");
+    }
+
+    /** The game port players connect to: port= in its file, or server-port in server.properties. */
+    static String port(Server s) {
+        if (!s.config().get("port").isEmpty()) return s.config().get("port");
+        try {
+            for (String l : Files.readAllLines(s.properties(), StandardCharsets.ISO_8859_1)) {
+                if (l.startsWith("server-port=")) return l.substring(12).trim();
+            }
+        } catch (IOException ignored) {
+            // no file yet
+        }
+        return "25565";
+    }
+
+    // ---- evacuation ----
+
+    private final Map<String, java.util.concurrent.CompletableFuture<Boolean>> evacuations = new ConcurrentHashMap<>();
+
+    /**
+     * Asks the mod of a server to send every player to another server of the network (before a
+     * world reset), and waits until it says done. False without a mod on the bus or after the time.
+     */
+    public boolean evacuate(Server s, long millis) {
+        Peer p = peers.get(s.name());
+        if (p == null) return false;
+        var f = new java.util.concurrent.CompletableFuture<Boolean>();
+        evacuations.put(s.name(), f);
+        p.send(Json.map("op", "evacuate"));
+        try {
+            return f.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            return false;
+        } finally {
+            evacuations.remove(s.name());
+        }
     }
 
     /** Tells the other mods of the network who is on the bus now. */
@@ -637,6 +680,10 @@ public final class Network {
                 if (m.get("id") != null) p.send(Json.map("op", "sent", "id", m.get("id"), "delivered", any));
             }
             case "event" -> fleet.event("bus", s.name(), Json.str(m, "text", ""));
+            case "evacuated" -> {
+                var f = evacuations.get(s.name());
+                if (f != null) f.complete(true);
+            }
             default -> throw new IllegalArgumentException("unknown op " + op);
         }
     }

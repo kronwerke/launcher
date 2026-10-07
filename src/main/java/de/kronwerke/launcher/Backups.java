@@ -191,6 +191,49 @@ public final class Backups {
         }
     }
 
+    /**
+     * A fresh world: the players are sent to another server of the network first (when a mod
+     * on the bus can), the server stops, its world moves to <world>.reset-<stamp>, older reset
+     * worlds are deleted (one stays, for a look back), and the server starts with a new world.
+     */
+    public String reset(Server s) {
+        if (!s.minecraft()) throw new IllegalArgumentException(s.name() + " is not a Minecraft server");
+        if (!running.add(s.name())) throw new IllegalStateException("a backup or reset of " + s.name() + " is running");
+        try {
+            boolean was = s.wanted();
+            if (s.state() == Server.State.RUNNING) {
+                boolean moved = fleet.network().evacuate(s, 60_000);
+                fleet.event("reset", s.name(), moved ? "players sent away" : "no mod to send players away; they are kicked by the stop");
+            }
+            s.stop();
+            String level = levelName(s);
+            Path world = s.dir().resolve(level);
+            String aside = level + ".reset-" + LocalDateTime.now(fleet.schedule().zone()).format(STAMP);
+            boolean moved = Files.exists(world);
+            if (moved) Files.move(world, s.dir().resolve(aside));
+            List<Path> old = new ArrayList<>();
+            try (Stream<Path> st = Files.list(s.dir())) {
+                st.filter(p -> p.getFileName().toString().startsWith(level + ".reset-") && !p.getFileName().toString().equals(aside)).forEach(old::add);
+            }
+            if (moved) for (Path p : old) deleteTree(p); // the last old world stays for a look back
+            fleet.event("reset", s.name(), "new world; the old one is in " + aside);
+            fleet.alerts().send("reset", s.name(), "world reset");
+            if (was) s.start();
+            return aside;
+        } catch (IOException e) {
+            fleet.event("reset", s.name(), "reset failed: " + e.getMessage());
+            throw new IllegalStateException("reset failed: " + e.getMessage(), e);
+        } finally {
+            running.remove(s.name());
+        }
+    }
+
+    private static void deleteTree(Path p) throws IOException {
+        try (Stream<Path> walk = Files.walk(p)) {
+            for (Path x : walk.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(x);
+        }
+    }
+
     static Map<String, Object> info(Path p) throws IOException {
         return Json.map("name", p.getFileName().toString(), "size", Files.size(p));
     }
