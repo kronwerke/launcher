@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- The season page also finds Kronwerke Core when its jar is called kronwerke-<version>.jar.
+
 ## 0.3.0
 
 For everyone, not only Kronwerke.

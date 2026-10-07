@@ -93,7 +93,7 @@ public final class Web {
         if (s.equals("on")) return true;
         if (s.equals("off")) return false;
         try (var files = Files.list(fleet.main().dir().resolve("mods"))) {
-            return files.anyMatch(p -> p.getFileName().toString().startsWith("kronwerke-core"));
+            return files.anyMatch(p -> p.getFileName().toString().matches("kronwerke(-core)?-[0-9].*\\.jar"));
         } catch (IOException e) {
             return false;
         }
