@@ -280,6 +280,26 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min
 .stepper { display: inline-flex; align-items: center; gap: 0.35rem; }
 .stepper b { min-width: 1.5rem; text-align: center; }
 
+/* ---- mods --------------------------------------------------------------------------- */
+.modlist { display: grid; }
+.mod { display: grid; grid-template-columns: 2.6rem 1fr auto; gap: 0.9rem; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--line); }
+.mod:last-child { border-bottom: 0; }
+.mod:hover { background: rgba(242, 237, 227, 0.025); }
+.modicon { width: 2.6rem; height: 2.6rem; border-radius: 8px; object-fit: cover; background: var(--raised); display: grid; place-items: center; font-weight: 700; color: var(--mute); }
+.mod-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.mod-title a, .found a { text-decoration: none; font-weight: 650; }
+.mod-title a:hover, .found a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.mod-sub { font-size: 0.75rem; margin-top: 0.1rem; }
+.mod-sum { font-size: 0.8125rem; margin-top: 0.2rem; max-width: 70ch; }
+.pill.src.mr { color: #8fd18b; border-color: rgba(143, 209, 139, 0.4); }
+.pill.src.cf { color: #f0a35e; border-color: rgba(240, 163, 94, 0.45); }
+.findgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 1rem; margin-top: 1rem; }
+.found { display: grid; gap: 0.6rem; padding: 1rem; align-content: start; }
+.found p { margin: 0; font-size: 0.8125rem; }
+.found-top { display: grid; grid-template-columns: 2.6rem 1fr; gap: 0.75rem; align-items: center; }
+details.changes summary { cursor: pointer; padding: 0.85rem 1rem; font-weight: 650; }
+@media (max-width: 760px) { .mod { grid-template-columns: 2.2rem 1fr; } .mod-act { grid-column: 1 / -1; } }
+
 /* ---- files ----------------------------------------------------------------------------- */
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; font-size: 0.875rem; }
 .crumbs a { padding: 0.15rem 0.35rem; border-radius: 4px; text-decoration: none; color: var(--mute); }

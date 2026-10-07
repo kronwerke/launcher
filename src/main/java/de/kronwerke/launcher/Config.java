@@ -69,6 +69,11 @@ public final class Config {
             console.origins=
             console.rpid=
 
+            # CurseForge for the mods page goes through a proxy that holds a key, so the key never
+            # sits in a launcher. An own key in console/curseforge.key is used directly instead.
+            # Empty and no key: Modrinth only.
+            curseforge.proxy=https://api.kronwerke.com/curseforge
+
             # Where launcher updates come from: a GitHub repository with releases like this one's.
             update.repo=kronwerke/launcher
 

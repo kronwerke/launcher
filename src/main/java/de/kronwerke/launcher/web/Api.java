@@ -53,11 +53,20 @@ final class Api {
     private volatile Map<String, Object> remotePack;
     private volatile long remoteAt;
     private final long started = Instant.now().getEpochSecond();
+    private final Mods mods;
 
     Api(Web web) {
         this.web = web;
         this.fleet = web.fleet;
         this.access = web.access;
+        String curse = "";
+        try {
+            Path f = web.dir.resolve("curseforge.key");
+            if (Files.exists(f)) curse = Files.readString(f).trim();
+        } catch (IOException ignored) {
+            // no key
+        }
+        this.mods = new Mods(curse, web.cfg.get("curseforge.proxy"));
     }
 
     void close() {
@@ -535,6 +544,41 @@ final class Api {
             case "crashes" -> {
                 need(r, "read");
                 r.ok(crashes(s));
+            }
+            case "mods" -> {
+                Mods.Target target = Mods.target(s, fleet.pack().local());
+                if (sub.equals("search")) {
+                    need(r, "read");
+                    r.ok(mods.search(target, r.q("q", ""), (int) Math.min(1000, Long.parseLong(r.q("offset", "0")))));
+                    return;
+                }
+                switch (m) {
+                    case "GET" -> {
+                        need(r, "read");
+                        Map<String, Object> list = mods.list(s, target, r.q("fresh", "").equals("1"));
+                        list.put("managed", s.type().equals("neoforge") && !fleet.config().get("pack.url").isEmpty());
+                        r.ok(list);
+                    }
+                    case "POST" -> {
+                        Map<String, Object> b = r.body();
+                        String project = Json.str(b, "project", ""), replace = Json.str(b, "replace", "");
+                        act(r, "pack", replace.isEmpty() ? "install mod" : "update mod", s.name(), project + (replace.isEmpty() ? "" : " for " + replace), () -> {
+                            List<String> present = new ArrayList<>();
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> now = (List<Map<String, Object>>) mods.list(s, target, false).get("mods");
+                            for (Map<String, Object> x : now) if (x.get("project") != null) present.add(String.valueOf(x.get("project")));
+                            return Json.map("files", mods.install(target, project, replace, present), "restart", s.state() == Server.State.RUNNING);
+                        });
+                    }
+                    case "DELETE" -> {
+                        String file = r.q("file", "");
+                        act(r, "pack", "remove mod", s.name(), file, () -> {
+                            Mods.remove(target, file);
+                            return Json.map("removed", file, "restart", s.state() == Server.State.RUNNING);
+                        });
+                    }
+                    default -> throw new Web.Http(405, "GET, POST or DELETE");
+                }
             }
             default -> throw new Web.Http(404, "no such endpoint");
         }

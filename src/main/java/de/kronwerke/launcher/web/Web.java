@@ -273,7 +273,7 @@ public final class Web {
             header("Referrer-Policy", "no-referrer");
             header("X-Frame-Options", "DENY");
             header("Strict-Transport-Security", "max-age=31536000");
-            header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://mc-heads.net; "
+            header("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://mc-heads.net https://cdn.modrinth.com https://media.forgecdn.net; "
                     + "style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; "
                     + "base-uri 'none'; form-action 'self'");
             header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");

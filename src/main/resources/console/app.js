@@ -465,7 +465,35 @@ const EN = {
   "Whitelist": "Whitelist",
   "Operatoren": "Operators",
   "Streamer und Plätze": "Streamers and slots",
-  "Spieler einladen": "Invite player"
+  "Spieler einladen": "Invite player",
+  "Mods und Plugins": "Mods and plugins",
+  "Was auf den Servern läuft, mit Daten von Modrinth und CurseForge. Neues finden, installieren, aktualisieren, entfernen.": "What runs on the servers, with data from Modrinth and CurseForge. Find, install, update and remove.",
+  " bringen?": "?",
+  "Pack auf dem Server": "Pack on the server",
+  " dahinter": " behind",
+  "Wirkt nach einem Neustart von ": "Takes effect after a restart of ",
+  "Frage Modrinth und CurseForge...": "Asking Modrinth and CurseForge...",
+  "Plugins durchsuchen": "Search plugins",
+  "Updates": "Updates",
+  "Unbekannt": "Unknown",
+  "Update: ": "Update: ",
+  " aktualisiert": " updated",
+  "Dieser Server bekommt Mods aus dem Pack; beim nächsten Pack-Update kann sie wiederkommen. ": "This server gets its mods from the pack; the next pack update may bring it back. ",
+  "Die Datei kommt in den Ordner .removed, wirksam nach einem Neustart.": "The file moves to the .removed folder and is gone after a restart.",
+  "Neustart nötig": "Restart needed",
+  "Nichts passt.": "Nothing matches.",
+  "ohne Loader": "no loader",
+  ", CurseForge aus": ", CurseForge off",
+  "Neu abgleichen": "Match again",
+  "Mit Abhängigkeiten": "With dependencies",
+  "Modrinth durchsuchen": "Search Modrinth",
+  "von ": "by ",
+  " Downloads": " downloads",
+  " installiert": " installed",
+  "Installieren": "Install",
+  "Nichts gefunden.": "Nothing found.",
+  "Installiert": "Installed",
+  "Finden": "Find"
   };
 function T(s) {
   if (s == null) return s;
@@ -687,7 +715,7 @@ const PAGES = [
   { path: "/konsole", name: "Konsole", key: "k", draw: pageConsole },
   { path: "/spieler", name: "Spieler", key: "s", draw: pagePlayers },
   { path: "/season", name: "Season", key: "e", draw: pageSeason, feature: "season" },
-  { path: "/pack", name: "Pack und Mods", key: "p", draw: pagePack },
+  { path: "/pack", name: "Mods und Plugins", key: "m", draw: pagePack },
   { path: "/dateien", name: "Dateien", key: "d", draw: pageFiles, scope: "files" },
   { path: "/ressourcen", name: "Ressourcen", key: "r", draw: pageResources },
   { path: "/verlauf", name: "Verlauf", key: "v", draw: pageHistory },
@@ -1410,47 +1438,136 @@ function newer(a, b) {
   return false;
 }
 
-function pagePack(main) {
-  const body = h("div", { class: "stack" }, h("p", { class: "dim" }, T("Lade...")));
-  main.append(header(T("Pack und Mods"), T("Was auf dem Server läuft und was im Repository wartet.")), body);
-  const load = async fresh => {
+function pagePack(main, rest) {
+  const servers = S.overview.servers.filter(s => s.type !== "command").map(s => s.name);
+  const parts = rest.split("/").filter(Boolean);
+  let server = servers.includes(parts[0]) ? parts[0] : servers[0];
+  let tab = parts[1] === "finden" ? "finden" : "installiert";
+  const packBox = h("div", { class: "stack" });
+  const body = h("div", { class: "stack" });
+  const seg = h("div", { class: "seg" });
+  const tabs = h("div", { class: "seg" });
+  main.append(header(T("Mods und Plugins"), T("Was auf den Servern läuft, mit Daten von Modrinth und CurseForge. Neues finden, installieren, aktualisieren, entfernen.")),
+    packBox, h("div", { class: "actions", style: { marginBottom: "1rem" } }, seg, tabs), body);
+  const nav = () => {
+    put(seg, servers.map(n => h("button", { type: "button", "aria-pressed": String(n === server), style: { "--c": colorOf(n) }, onclick: () => { server = n; sync(); } }, h("span", { class: "dot" }), n)));
+    put(tabs, [["installiert", "Installiert"], ["finden", "Finden"]].map(([k, n]) => h("button", { type: "button", "aria-pressed": String(k === tab), onclick: () => { tab = k; sync(); } }, T(n))));
+  };
+  const sync = () => { history.replaceState(null, "", "/pack/" + server + (tab === "finden" ? "/finden" : "")); nav(); draw(); };
+  let data = null;
+
+  // the pack, when there is one
+  const loadPack = async fresh => {
     const p = await api("GET", "/pack" + (fresh ? "?fresh=1" : ""));
+    if (!p.url) return put(packBox);
     const local = p.local?.version, remote = p.remote?.version;
     const behind = remote && local && newer(remote, local);
     const sections = (p.remote?.changelog || "").split(/^## /m).slice(1).map(s => {
-      const [head, ...rest] = s.split("\n");
-      return { v: head.trim(), text: rest.join("\n").trim() };
+      const [head, ...r] = s.split("\n");
+      return { v: head.trim(), text: r.join("\n").trim() };
     }).filter(s => local && newer(s.v, local));
     const players = S.overview.servers.reduce((n, s) => n + s.players.length, 0);
     const update = async () => {
       const ok = await confirmDialog({
-        title: T("Pack auf ") + (remote || T("den neuesten Stand")) + " bringen?",
-        text: T("Alle Server stoppen, packwiz holt Mods und Configs, dann starten sie wieder. ") + (players ? players + " Spieler fliegen dabei raus." : T("Gerade ist niemand online.")),
+        title: T("Pack auf ") + (remote || T("den neuesten Stand")) + T(" bringen?"),
+        text: T("Alle Server stoppen, packwiz holt Mods und Configs, dann starten sie wieder. ") + (players ? players + T(" Spieler fliegen dabei raus.") : T("Gerade ist niemand online.")),
         ok: T("Aktualisieren"), danger: players > 0,
       });
       if (ok) { await run(T("Pack-Update läuft"), () => api("POST", "/pack/update", {})); go("/konsole/" + S.overview.servers[0].name); }
     };
-    const mods = p.mods || [];
-    const q = h("input", { type: "search", placeholder: mods.length + T(" Mods durchsuchen"), "aria-label": T("Mods durchsuchen") });
-    const tbody = h("tbody");
-    const drawMods = () => put(tbody, ...mods.filter(m => m.file.toLowerCase().includes(q.value.toLowerCase())).map(m =>
-      h("tr", null, h("td", null, m.file.startsWith("kronwerke-core") ? h("b", null, m.file) : m.file), h("td", { class: "right dim" }, fmt.bytes(m.size)))));
-    q.addEventListener("input", drawMods);
-    drawMods();
-    put(body, 
+    put(packBox,
       h("section", { class: "panel" }, h("div", { class: "body", style: { display: "flex", flexWrap: "wrap", gap: "1rem 2.5rem", alignItems: "center" } },
-        h("div", null, h("div", { class: "muted" }, T("Auf dem Server")), h("b", { style: { fontSize: "1.5rem" } }, local || "?")),
+        h("div", null, h("div", { class: "muted" }, T("Pack auf dem Server")), h("b", { style: { fontSize: "1.5rem" } }, local || "?")),
         h("div", null, h("div", { class: "muted" }, T("Im Repository")), h("b", { style: { fontSize: "1.5rem" } }, remote || (p.remote?.error ? T("nicht erreichbar") : "?"))),
         h("div", null, h("div", { class: "muted" }, "NeoForge"), h("b", null, p.local?.neoforge || "?")),
         h("span", { style: { flex: "1" } }),
-        p.updating ? h("span", { class: "pill warn" }, T("Update läuft")) : behind ? h("span", { class: "pill warn" }, sections.length + (sections.length === 1 ? " Version" : T(" Versionen")) + " dahinter") : h("span", { class: "pill ok" }, T("Aktuell")),
-        h("button", { class: "btn quiet", onclick: () => load(true) }, T("Neu prüfen")),
+        p.updating ? h("span", { class: "pill warn" }, T("Update läuft")) : behind ? h("span", { class: "pill warn" }, sections.length + (sections.length === 1 ? T(" Version") : T(" Versionen")) + T(" dahinter")) : h("span", { class: "pill ok" }, T("Aktuell")),
+        h("button", { class: "btn quiet", onclick: () => loadPack(true) }, T("Neu prüfen")),
         can("pack") ? h("button", { class: "btn " + (behind ? "primary" : ""), onclick: update, disabled: p.updating || null }, T("Pack aktualisieren")) : null)),
-      sections.length ? h("section", { class: "panel" }, h("header", null, h("h2", null, T("Was dazukommt"))),
-        h("div", { class: "body stack" }, sections.map(s => h("div", null, h("b", null, s.v), h("div", { class: "muted", style: { whiteSpace: "pre-wrap", marginTop: "0.3rem" } }, s.text))))) : null,
-      h("section", { class: "panel" }, h("header", null, h("h2", null, "Mods"), q), h("table", null, tbody)));
+      sections.length ? h("details", { class: "panel changes" }, h("summary", null, T("Was dazukommt"), h("span", { class: "dim" }, " " + sections.map(s => s.v).join(", "))),
+        h("div", { class: "body stack" }, sections.map(s => h("div", null, h("b", null, s.v), h("div", { class: "muted", style: { whiteSpace: "pre-wrap", marginTop: "0.3rem" } }, s.text))))) : null);
   };
-  load(false).catch(e => put(body, h("p", { class: "empty" }, e.message)));
+
+  const icon = (url, title) => url ? h("img", { class: "modicon", src: url, alt: "", loading: "lazy" }) : h("span", { class: "modicon blank", "aria-hidden": "true" }, (title || "?").slice(0, 1).toUpperCase());
+  const source = m => m.source === "modrinth" ? h("span", { class: "pill src mr" }, "Modrinth") : m.source === "curseforge" ? h("span", { class: "pill src cf" }, "CurseForge") : h("span", { class: "pill" }, T("unbekannt"));
+  const restartHint = r => r?.restart ? T("Wirkt nach einem Neustart von ") + server + "." : "";
+
+  const draw = () => tab === "finden" ? drawFind() : drawInstalled();
+
+  let q = "", filter = "alle";
+  const drawInstalled = async (fresh) => {
+    if (!data || data.server !== server || fresh) {
+      put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, T("Frage Modrinth und CurseForge..."))));
+      try { data = { server, ...(await api("GET", "/servers/" + server + "/mods" + (fresh ? "?fresh=1" : ""))) }; } catch (e) { return put(body, h("p", { class: "empty" }, e.message)); }
+    }
+    const mods = data.mods || [];
+    const updates = mods.filter(m => m.latest);
+    const unknown = mods.filter(m => !m.source);
+    const search = h("input", { type: "search", value: q, placeholder: (data.kind === "plugin" ? T("Plugins durchsuchen") : T("Mods durchsuchen")) + " (" + mods.length + ")" });
+    search.addEventListener("input", () => { q = search.value.toLowerCase(); drawList(); });
+    const fseg = h("div", { class: "seg" }, [["alle", T("Alle"), mods.length], ["updates", T("Updates"), updates.length], ["unbekannt", T("Unbekannt"), unknown.length]].map(([k, n, c]) =>
+      h("button", { type: "button", "aria-pressed": String(k === filter), onclick: () => { filter = k; drawInstalled(); } }, n, h("span", { class: "dim", style: { marginLeft: "0.35rem" } }, String(c)))));
+    const list = h("div", { class: "modlist" });
+    const drawList = () => {
+      const shown = mods.filter(m => filter === "alle" || (filter === "updates" ? m.latest : !m.source))
+        .filter(m => !q || [m.title, m.name, m.file].some(x => (x || "").toLowerCase().includes(q)));
+      put(list, shown.length ? shown.map(m => h("div", { class: "mod" },
+        icon(m.icon, m.title || m.name || m.file),
+        h("div", { class: "mod-main" },
+          h("div", { class: "mod-title" }, m.url ? h("a", { href: m.url, target: "_blank", rel: "noopener" }, m.title || m.name || m.file) : h("b", null, m.title || m.name || m.file),
+            source(m), m.latest ? h("span", { class: "pill warn" }, T("Update: ") + m.latest) : null),
+          h("div", { class: "dim mod-sub" }, [m.version || m.declared, m.file].filter(Boolean).join(", ") + "" + ", " + fmt.bytes(m.size)),
+          m.summary ? h("div", { class: "muted mod-sum" }, m.summary) : null),
+        h("div", { class: "actions mod-act" },
+          m.latest && m.source === "modrinth" && can("pack") ? h("button", { class: "btn small primary", onclick: () => install(m.project, m.file, (m.title || m.file) + T(" aktualisiert")) }, T("Aktualisieren")) : null,
+          can("pack") ? h("button", { class: "btn small quiet", "aria-label": T("Entfernen"), onclick: async () => {
+            if (!(await confirmDialog({ title: (m.title || m.file) + T(" entfernen?"), text: (data.managed ? T("Dieser Server bekommt Mods aus dem Pack; beim nächsten Pack-Update kann sie wiederkommen. ") : "") + T("Die Datei kommt in den Ordner .removed, wirksam nach einem Neustart."), ok: T("Entfernen"), danger: true }))) return;
+            const r = await run(T("Entfernt"), () => api("DELETE", "/servers/" + server + "/mods?file=" + encodeURIComponent(m.file)));
+            if (r?.restart) toast(T("Neustart nötig"), restartHint(r));
+            drawInstalled(true);
+          } }, T("Entfernen")) : null))) : h("p", { class: "empty" }, T("Nichts passt.")));
+    };
+    drawList();
+    put(body,
+      data.error ? h("p", { class: "muted" }, data.error) : null,
+      h("div", { class: "actions" }, fseg, search, h("span", { style: { flex: "1" } }),
+        h("span", { class: "dim" }, (data.loader || T("ohne Loader")) + " " + (data.minecraft || "") + (data.curseforge ? "" : T(", CurseForge aus"))),
+        h("button", { class: "btn quiet small", onclick: () => drawInstalled(true) }, T("Neu abgleichen"))),
+      h("section", { class: "panel" }, list));
+  };
+
+  const install = async (project, replace, title) => {
+    const r = await run(title, () => api("POST", "/servers/" + server + "/mods", { project, replace }));
+    if (r?.files?.length > 1) toast(T("Mit Abhängigkeiten"), r.files.join("\n"));
+    if (r?.restart) toast(T("Neustart nötig"), restartHint(r));
+    data = null;
+  };
+
+  let fq = "", results = null, timer = null;
+  const drawFind = () => {
+    const input = h("input", { type: "search", value: fq, placeholder: T("Modrinth durchsuchen"), autofocus: true, style: { flex: "1", minWidth: "14rem" } });
+    const grid = h("div", { class: "findgrid" });
+    const show = res => put(grid, (res?.hits || []).length ? res.hits.map(p => h("article", { class: "panel found" },
+      h("div", { class: "found-top" }, icon(p.icon_url, p.title), h("div", null, h("a", { href: "https://modrinth.com/" + p.project_type + "/" + p.slug, target: "_blank", rel: "noopener" }, h("b", null, p.title)),
+        h("div", { class: "dim" }, T("von ") + p.author + ", " + Intl.NumberFormat(LANG === "de" ? "de-DE" : "en-GB", { notation: "compact" }).format(p.downloads) + T(" Downloads")))),
+      h("p", { class: "muted" }, p.description),
+      h("div", { class: "actions" }, (p.categories || []).slice(0, 3).map(c => h("span", { class: "pill" }, c)), h("span", { style: { flex: "1" } }),
+        (data?.mods || []).some(m => m.project === p.project_id) ? h("span", { class: "pill ok" }, T("Installiert"))
+          : can("pack") ? h("button", { class: "btn small primary", onclick: e => { e.target.disabled = true; install(p.project_id, "", p.title + T(" installiert")); } }, T("Installieren")) : null))) : h("p", { class: "empty" }, T("Nichts gefunden.")));
+    if (!data || data.server !== server) api("GET", "/servers/" + server + "/mods").then(d => { data = { server, ...d }; if (results) show(results); }).catch(() => {});
+    const searchNow = async () => {
+      try { results = await api("GET", "/servers/" + server + "/mods/search?q=" + encodeURIComponent(fq)); show(results); } catch (e) { put(grid, h("p", { class: "empty" }, e.message)); }
+    };
+    input.addEventListener("input", () => { fq = input.value; clearTimeout(timer); timer = setTimeout(searchNow, 300); });
+    put(body, h("div", { class: "actions" }, input), grid);
+    if (results) show(results);
+    searchNow();
+    input.focus();
+  };
+
+  nav();
+  loadPack(false).catch(() => {});
+  draw();
 }
 
 // ---- files -------------------------------------------------------------------------------------------
