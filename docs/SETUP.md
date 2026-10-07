@@ -2,13 +2,13 @@
 
 For a Pterodactyl style panel, where the startup command is fixed and runs `java ... -jar server.jar`. Nothing here needs support from the host. On a machine of your own, run the jar in the folder the servers should live in.
 
-The launcher's own files live in `launcher/` next to the jar (an install that already has a `kronwerke/` folder keeps using that one).
+The launcher's own files live in `launcher/` next to the jar. Rename the folder to anything you like: the launcher uses whichever folder holds `launcher.properties`.
 
 ## Once
 
 1. **Docker image:** Java 21 or newer, as your servers need it.
 2. **Automatic update:** off. It would replace `server.jar`.
-3. **The jar:** download `kronwerke-launcher.jar` from the [latest release](https://github.com/kronwerke/launcher/releases/latest), check it against `SHA256SUMS`, and upload it to the root folder under the name the panel starts (`server.jar` on most panels). No Minecraft installer writes a file with that name, so nothing overwrites it.
+3. **The jar:** download `launcher.jar` from the [latest release](https://github.com/kronwerke/launcher/releases/latest), check it against `SHA256SUMS`, and upload it to the root folder under the name the panel starts (`server.jar` on most panels). No Minecraft installer writes a file with that name, so nothing overwrites it.
 4. **Memory:** the panel's memory share is the launcher's own heap, and it needs little (256 MB is plenty). Each server's heap is `memory` in its file. The launcher refuses a start when the heaps plus 3 GB per server would not fit into the container.
 5. **Start.** The first start writes `launcher/launcher.properties` and `launcher/servers/main.properties`, every setting with a comment, and waits.
 

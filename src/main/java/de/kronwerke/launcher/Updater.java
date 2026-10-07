@@ -81,7 +81,7 @@ public final class Updater {
 
     /** Where installed launcher jars live; Boot looks in the same places. */
     static Path jars(Path home) {
-        return home.resolve(home.getFileName().toString().equals("kronwerke") ? "launcher" : "jars");
+        return Files.exists(home.resolve("launcher/current")) ? home.resolve("launcher") : home.resolve("jars");
     }
 
     static String sha256(Path file) throws Exception {

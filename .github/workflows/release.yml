@@ -38,8 +38,8 @@ jobs:
       - name: build
         run: |
           sh build.sh "${VERSION#v}"
-          test "$(java -jar build/kronwerke-launcher.jar version)" = "${VERSION#v}"
-          mkdir dist && cp build/kronwerke-launcher.jar dist/
+          test "$(java -jar build/launcher.jar version)" = "${VERSION#v}"
+          mkdir dist && cp build/launcher.jar dist/
           cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
 
       - name: notes

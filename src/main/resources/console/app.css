@@ -70,7 +70,8 @@ a { color: inherit; }
   padding: 1.1rem 0.75rem 1rem; border-right: 1px solid var(--line); background: var(--night);
 }
 .mark { display: flex; align-items: center; gap: 0.6rem; padding: 0 0.5rem; text-decoration: none; }
-.mark svg { width: 1.6rem; height: 1.6rem; flex: none; }
+.mark svg, .mark .logo { width: 1.6rem; height: 1.6rem; flex: none; border-radius: 6px; }
+.door-card .logo { width: 2.8rem; height: 2.8rem; border-radius: 9px; }
 .mark b { font-weight: 750; font-size: 1rem; letter-spacing: -0.01em; }
 .mark span { color: var(--dim); font-weight: 500; }
 

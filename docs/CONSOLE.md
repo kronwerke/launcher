@@ -18,7 +18,7 @@ browser  --HTTPS-->  Cloudflare  --HTTPS, Cloudflare's client certificate-->  co
 On the first start with `console.port` set, the panel's console shows
 
 ```
-[Launcher] Console: nobody has a passkey yet. Open https://console.example.com/setup and enter KW-XXXX-XXXX
+[Launcher] Console: nobody has a passkey yet. Open https://console.example.com/setup and enter XXXX-XXXX
 ```
 
 The code is also in `launcher/console/setup.code`. Open the address, enter the code and a name, and the browser makes a passkey (Touch ID, Windows Hello, a phone, a security key). That person is the owner. The code is gone afterwards.
@@ -38,7 +38,7 @@ Invite under Access: the link is valid for 24 hours and once. Whoever opens it m
 
 ## API keys
 
-For programs. Made under Access, shown once, stored as a hash. Scopes: `read`, `players`, `command`, `power`, `files`, `pack`, `config`. No key can manage people or keys. Send it as `Authorization: Bearer kwc_...`.
+For programs. Made under Access, shown once, stored as a hash. Scopes: `read`, `players`, `command`, `power`, `files`, `pack`, `config`. No key can manage people or keys. Send it as `Authorization: Bearer key_...`.
 
 Kronwerke's operations tooling keeps its key in a vault and sends it only to the console's host.
 
@@ -85,6 +85,7 @@ In `launcher/launcher.properties`:
 | `console.host` | empty, needed | The name passkeys are bound to |
 | `console.language` | `en` | `en` or `de` |
 | `console.accent` | `#e5b451` | The accent colour |
+| `logo.svg`, `logo.png` | | Put either next to `launcher.properties` for your own logo |
 | `console.season` | `auto` | The Kronwerke season page: auto (Kronwerke Core in the first server's mods), on, off |
 | `console.bind` | `0.0.0.0` | |
 | `console.client.ca` | `cloudflare` | Which client certificates count; `off` only for a test |

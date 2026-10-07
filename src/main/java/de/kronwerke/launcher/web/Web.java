@@ -42,7 +42,7 @@ import javax.net.ssl.SSLParameters;
  */
 public final class Web {
     static final long MAX_BODY = 16L << 20;
-    static final String COOKIE = "__Host-kw";
+    static final String COOKIE = "__Host-session";
 
     final Fleet fleet;
     final Config cfg;
@@ -153,8 +153,8 @@ public final class Web {
                 api.handle(r, path.substring(4));
             } else if (path.startsWith("/assets/")) {
                 asset(r, path.substring(8));
-            } else if (path.equals("/favicon.svg")) {
-                asset(r, "favicon.svg");
+            } else if (path.equals("/favicon.svg") || path.equals("/brand/logo")) {
+                logo(r);
             } else if (ex.getRequestMethod().equals("GET")) {
                 page(r);
             } else {
@@ -183,6 +183,22 @@ public final class Web {
                 .replace("{{title}}", title().replace("&", "&amp;").replace("<", "&lt;"));
         r.header("Cache-Control", "no-store");
         r.send(200, "text/html; charset=utf-8", html.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * The logo, for the console's corner and the browser tab: logo.svg or logo.png next to
+     * launcher.properties, or a plain mark that belongs to nobody.
+     */
+    private void logo(Req r) throws IOException {
+        for (String n : List.of("logo.svg", "logo.png")) {
+            Path p = fleet.home().resolve(n);
+            if (Files.isRegularFile(p) && Files.size(p) < 512 << 10) {
+                r.header("Cache-Control", "public, max-age=300");
+                r.send(200, n.endsWith(".svg") ? "image/svg+xml" : "image/png", Files.readAllBytes(p));
+                return;
+            }
+        }
+        asset(r, "favicon.svg");
     }
 
     private void asset(Req r, String name) throws IOException {

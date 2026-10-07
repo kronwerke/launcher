@@ -224,7 +224,7 @@ final class Api {
     private void checkCsrf(Web.Req r) {
         if (!"session".equals(r.who.kind())) return;
         String token = Json.str(r.who.session(), "csrf", "");
-        if (!Access.constantEquals(r.headerIn("X-Kw-Csrf"), token)) throw new SecurityException("missing or wrong request token");
+        if (!Access.constantEquals(r.headerIn("X-Csrf-Token"), token)) throw new SecurityException("missing or wrong request token");
         String origin = r.headerIn("Origin");
         if (!origin.isEmpty() && !web.origins.contains(origin)) throw new SecurityException("wrong origin");
     }
@@ -863,12 +863,18 @@ final class Api {
                     String base = Updater.prefix(fleet.config()) + version + "/";
                     String sums = get(base + "SHA256SUMS");
                     String sha = "";
+                    String jar = "";
                     for (String l : sums.split("\n")) {
                         String[] f = l.trim().split("\\s+");
-                        if (f.length == 2 && f[1].replace("*", "").equals("kronwerke-launcher.jar")) sha = f[0];
+                        String n = f.length == 2 ? f[1].replace("*", "") : "";
+                        // launcher.jar since 0.3, kronwerke-launcher.jar before
+                        if (n.equals("launcher.jar") || (jar.isEmpty() && n.equals("kronwerke-launcher.jar"))) {
+                            sha = f[0];
+                            jar = n;
+                        }
                     }
-                    if (sha.isEmpty()) throw new IOException("the release has no checksum for kronwerke-launcher.jar");
-                    return Updater.install(fleet, base + "kronwerke-launcher.jar", sha, true);
+                    if (sha.isEmpty()) throw new IOException("the release has no checksum for launcher.jar");
+                    return Updater.install(fleet, base + jar, sha, true);
                 });
             }
             case "settings" -> {

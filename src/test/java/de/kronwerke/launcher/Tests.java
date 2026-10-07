@@ -173,10 +173,14 @@ public final class Tests {
     static void homeFolders() throws IOException {
         Path a = Files.createTempDirectory("kwl");
         check(Home.of(a).equals(a.resolve("launcher")) && de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("launcher/jars")), "a new install uses launcher");
-        Files.createDirectories(a.resolve("kronwerke"));
-        Files.writeString(a.resolve("kronwerke/launcher.properties"), "");
-        check(Home.of(a).equals(a.resolve("kronwerke")) && de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("kronwerke/launcher"))
-                && Updater.jars(Home.of(a)).equals(a.resolve("kronwerke/launcher")), "the first install keeps kronwerke");
+        Files.createDirectories(a.resolve("acme"));
+        Files.writeString(a.resolve("acme/launcher.properties"), "");
+        check(Home.of(a).equals(a.resolve("acme")) && de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("acme/jars"))
+                && Updater.jars(Home.of(a)).equals(a.resolve("acme/jars")), "a renamed folder is found");
+        Files.createDirectories(a.resolve("acme/launcher"));
+        Files.writeString(a.resolve("acme/launcher/current"), "x.jar");
+        check(de.kronwerke.boot.Boot.jarDirFor(a).equals(a.resolve("acme/launcher")) && Updater.jars(Home.of(a)).equals(a.resolve("acme/launcher")),
+                "an older install keeps its jars where they are");
         Path b = Files.createTempDirectory("kwl");
         Config c = Config.load(Home.of(b).resolve("launcher.properties"));
         List<Config.ServerConfig> s = Config.servers(b, c);

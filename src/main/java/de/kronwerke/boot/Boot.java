@@ -110,11 +110,18 @@ public final class Boot {
         System.exit(0);
     }
 
-    /** Installed launcher jars: kronwerke/launcher for the first install, launcher/jars for any other. */
+    /**
+     * Installed launcher jars: "jars" in the folder that holds launcher.properties (whatever it
+     * is called), or "launcher" there when an older install put them there.
+     */
     static Path jarDir(Path root) {
-        Path old = root.resolve("kronwerke/launcher");
-        if (Files.exists(root.resolve("kronwerke/launcher.properties"))) return old;
-        return root.resolve("launcher/jars");
+        Path home = root.resolve("launcher");
+        try (var s = Files.list(root)) {
+            home = s.filter(p -> Files.isRegularFile(p.resolve("launcher.properties"))).sorted().findFirst().orElse(home);
+        } catch (IOException ignored) {
+            // keep the default
+        }
+        return Files.exists(home.resolve("launcher/current")) ? home.resolve("launcher") : home.resolve("jars");
     }
 
     /** current names a jar in the same folder; anything else means this jar. */

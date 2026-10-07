@@ -566,7 +566,7 @@ const S = { session: null, overview: null, logs: {}, all: [], stream: null, metr
 async function api(method, path, body) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (S.session?.csrf) headers["X-Kw-Csrf"] = S.session.csrf;
+  if (S.session?.csrf) headers["X-Csrf-Token"] = S.session.csrf;
   let res;
   try {
     res = await fetch("/api" + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: "same-origin" });
@@ -701,7 +701,7 @@ function deviceLabel() {
 // ---- the door: sign in, first passkey, invites -------------------------------------------
 
 function crownMark() {
-  return svg('<path d="M4 19h16M5 19l-1-11 5 4.5L12 5l3 7.5L20 8l-1 11" stroke="#e5b451" stroke-width="1.6"/>');
+  return h("img", { class: "logo", src: "/brand/logo", alt: "" });
 }
 
 function door(kind, message) {
@@ -714,7 +714,7 @@ function door(kind, message) {
   const note = message && kind === "login" ? h("p", { class: "note" }, message) : null;
   let card;
   if (kind === "setup") {
-    const code = h("input", { type: "text", autocomplete: "one-time-code", placeholder: "KW-XXXX-XXXX", required: true, spellcheck: "false" });
+    const code = h("input", { type: "text", autocomplete: "one-time-code", placeholder: "XXXX-XXXX", required: true, spellcheck: "false" });
     const name = h("input", { type: "text", autocomplete: "nickname", placeholder: T("Name"), required: true, maxlength: 40 });
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
@@ -2011,7 +2011,7 @@ async function waitForServer(name) {
 
 async function uploadJar(server, file) {
   const res = await fetch("/api/servers/" + server + "/jar?name=" + encodeURIComponent(file.name.replace(/[^A-Za-z0-9_.+-]/g, "-")), {
-    method: "PUT", body: file, headers: { "X-Kw-Csrf": S.session.csrf, "Content-Type": "application/octet-stream" }, credentials: "same-origin",
+    method: "PUT", body: file, headers: { "X-Csrf-Token": S.session.csrf, "Content-Type": "application/octet-stream" }, credentials: "same-origin",
   });
   const j = await res.json().catch(() => ({ ok: false, error: "HTTP " + res.status }));
   if (!j.ok) throw new Error(j.error);

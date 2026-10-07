@@ -55,7 +55,7 @@ Written for [Kronwerke](https://kronwerke.com), a modded Minecraft server for st
 
 ```
 sh build.sh
-cd /path/to/server && java -jar kronwerke-launcher.jar
+cd /path/to/server && java -jar launcher.jar
 ```
 
 The first start writes `launcher/launcher.properties` and `launcher/servers/main.properties` with every setting explained, and waits: tell `main.properties` what to run (`jar=paper.jar`, say) or set `pack.url` for a NeoForge pack, then `launcher reload`. On a game panel, see [docs/SETUP.md](docs/SETUP.md).

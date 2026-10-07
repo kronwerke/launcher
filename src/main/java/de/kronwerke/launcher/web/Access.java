@@ -152,7 +152,7 @@ final class Access {
 
     /** A new session for a user: the cookie value, kept only as a hash. */
     synchronized String newSession(String userId, String ip, String agent) throws IOException {
-        String token = token("kws_");
+        String token = token("ses_");
         list("sessions").add(Json.map("hash", hash(token), "user", userId, "csrf", token(""), "ip", ip,
                 "agent", agent.length() > 160 ? agent.substring(0, 160) : agent, "created", Instant.now().getEpochSecond(),
                 "expires", Instant.now().getEpochSecond() + SESSION_SECONDS));
@@ -167,7 +167,8 @@ final class Access {
 
     /** The key for a bearer token, or null. */
     synchronized Who key(String token) throws IOException {
-        if (token == null || !token.startsWith("kwc_")) return null;
+        // key_ since 0.3; kwc_ keys from 0.2 keep working
+        if (token == null || !(token.startsWith("key_") || token.startsWith("kwc_"))) return null;
         String h = hash(token);
         long now = Instant.now().getEpochSecond();
         for (Map<String, Object> k : list("keys")) {
@@ -190,7 +191,7 @@ final class Access {
         if (name.isBlank() || name.length() > 60) throw new IllegalArgumentException("a name of up to 60 characters");
         for (String s : scopes) if (!SCOPES.contains(s)) throw new IllegalArgumentException("unknown scope " + s);
         if (scopes.isEmpty()) throw new IllegalArgumentException("at least one scope");
-        String token = token("kwc_");
+        String token = token("key_");
         String id = "k_" + token("").substring(0, 10);
         long now = Instant.now().getEpochSecond();
         list("keys").add(Json.map("id", id, "name", name.trim(), "hash", hash(token), "prefix", token.substring(0, 10),
@@ -208,7 +209,7 @@ final class Access {
     /** Makes an invite link token for a role, valid one day, used once. */
     synchronized String newInvite(String role, String name, String by) throws IOException {
         if (!ROLES.containsKey(role)) throw new IllegalArgumentException("unknown role " + role);
-        String token = token("kwi_");
+        String token = token("inv_");
         list("invites").add(Json.map("hash", hash(token), "id", "i_" + token("").substring(0, 10), "role", role, "name", name.trim(),
                 "expires", Instant.now().getEpochSecond() + 86400, "by", by));
         save();
@@ -485,9 +486,9 @@ final class Access {
         return b;
     }
 
-    /** KW-XXXX-XXXX from letters and digits that cannot be confused. */
+    /** XXXX-XXXX from letters and digits that cannot be confused. */
     private String code() {
-        StringBuilder b = new StringBuilder("KW-");
+        StringBuilder b = new StringBuilder();
         for (int i = 0; i < 8; i++) {
             if (i == 4) b.append('-');
             b.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));
@@ -496,7 +497,9 @@ final class Access {
     }
 
     static String normalizeCode(String c) {
-        return c == null ? "" : c.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        // codes from 0.2 started with KW-; the letters are only decoration
+        String n = c == null ? "" : c.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        return n.length() == 10 && n.startsWith("KW") ? n.substring(2) : n;
     }
 
     static boolean constantEquals(String a, String b) {
