@@ -3,16 +3,12 @@ package de.kronwerke.launcher;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.net.http.WebSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -32,15 +28,14 @@ import java.util.concurrent.TimeUnit;
  *   bot:      welcome, pending {fingerprint}, req {id, op, args}, pong
  */
 public final class Link {
-    static final String UPDATE_PREFIX = "https://github.com/kronwerke/launcher/releases/download/";
-
     private final String url;
     private final String name;
     private final Path root;
+    private final Fleet fleet;
     private final Server server;
+    private volatile boolean closed;
     private final ServerFiles files;
     private final String key;
-    private final Path ownJar;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NORMAL).build();
     private final ExecutorService work = Executors.newCachedThreadPool(r -> {
@@ -56,16 +51,16 @@ public final class Link {
     private volatile boolean accepted;
     private final List<String> pending = new ArrayList<>();
 
-    public Link(String url, String name, Path root, Server server, Path ownJar) throws IOException {
+    public Link(String url, String name, Path root, Fleet fleet) throws IOException {
         this.url = url;
         this.name = name;
         this.root = root;
-        this.server = server;
-        this.ownJar = ownJar;
+        this.fleet = fleet;
+        this.server = fleet.main();
         Path keyFile = root.resolve("kronwerke/link.key");
         this.files = new ServerFiles(root, keyFile);
         this.key = loadKey(keyFile);
-        server.onState(this::sendState);
+        fleet.onState(this::sendState);
         server.onConsole(line -> {
             if (!follow) return;
             synchronized (pending) {
@@ -109,7 +104,7 @@ public final class Link {
     /** Keeps the connection up. Runs on its own thread until the launcher exits. */
     public void run() {
         long wait = 5;
-        while (true) {
+        while (!closed) {
             try {
                 connect();
                 wait = 5;
@@ -131,6 +126,7 @@ public final class Link {
             }
             ws = null;
             follow = false;
+            if (closed) return;
             if (accepted) {
                 accepted = false;
                 continue;
@@ -187,7 +183,7 @@ public final class Link {
                 .buildAsync(URI.create(url), listener).get(30, TimeUnit.SECONDS);
         lastSeen = System.currentTimeMillis();
         ws = w;
-        Pack.Info info = server.pack().local();
+        Pack.Info info = fleet.pack().local();
         send(Json.map("type", "hello", "key", key, "name", name, "launcher", Main.VERSION,
                 "state", server.state().name().toLowerCase(), "pack", info == null ? "" : info.version()));
     }
@@ -205,9 +201,25 @@ public final class Link {
         }
     }
 
-    private void sendState() {
-        send(Json.map("type", "event", "event", "state", "state", server.state().name().toLowerCase(),
-                "detail", server.detail(), "since", server.since().toString()));
+    /** Ends the connection for good, for a reload or the end of the launcher. */
+    public void close() {
+        closed = true;
+        WebSocket w = ws;
+        if (w != null) {
+            try {
+                w.sendClose(WebSocket.NORMAL_CLOSURE, "launcher ending").get(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                w.abort();
+            }
+        }
+        work.shutdownNow();
+    }
+
+    private void sendState(Server s) {
+        // the bot knows one server, the first; the others it reads from status
+        if (s != server) return;
+        send(Json.map("type", "event", "event", "state", "state", s.state().name().toLowerCase(),
+                "detail", s.detail(), "since", s.since().toString()));
     }
 
     private void flushConsole() {
@@ -249,43 +261,48 @@ public final class Link {
         }
     }
 
+    /**
+     * One request from the bot. Every op takes an optional "server"; without it the first
+     * server is meant, which is all a 0.1 bot knows.
+     */
     Object op(String op, Map<String, Object> a) throws Exception {
-        Path props = root.resolve("server.properties");
+        Server s = fleet.server(Json.str(a, "server", ""));
+        ServerFiles files = s == server ? this.files : new ServerFiles(s.dir(), root.resolve("kronwerke/link.key"));
         switch (op) {
             case "status": {
-                Pack.Info info = server.pack().local();
-                Map<String, Object> s = Json.map("state", server.state().name().toLowerCase(), "detail", server.detail(),
-                        "since", server.since().toString(), "pid", server.pid(), "starts", server.starts(),
-                        "launcher", Main.VERSION, "pack", info == null ? "" : info.version(),
-                        "neoforge", info == null ? "" : info.neoforge(), "java", System.getProperty("java.version"));
-                if (server.state() == Server.State.RUNNING) {
-                    try {
-                        s.put("players", Rcon.command(props, "list"));
-                    } catch (IOException e) {
-                        s.put("players", "rcon: " + e.getMessage());
-                    }
-                }
-                return s;
+                Map<String, Object> st = status(s);
+                st.put("launcher", Main.VERSION);
+                st.put("java", System.getProperty("java.version"));
+                List<Object> all = new ArrayList<>();
+                for (Server x : fleet.servers()) all.add(status(x));
+                st.put("servers", all);
+                return st;
             }
             case "command": {
                 String cmd = Json.str(a, "cmd", "");
                 if (cmd.isBlank()) throw new IllegalArgumentException("cmd is empty");
-                if (server.state() != Server.State.RUNNING) throw new IllegalStateException("Minecraft is " + server.state().name().toLowerCase());
-                return Rcon.command(props, cmd);
+                return s.command(cmd);
             }
             case "start":
-                server.start(Json.bool(a, "update", false));
+                if (Json.bool(a, "update", false)) {
+                    work.submit(() -> update(s));
+                    return "starting with a pack update";
+                }
+                s.start();
                 return "starting";
             case "stop":
-                work.submit(server::stop);
+                work.submit(s::stop);
                 return "stopping";
             case "restart": {
-                boolean update = Json.bool(a, "update", false);
-                work.submit(() -> server.restart(update));
-                return update ? "restarting with a pack update" : "restarting";
+                if (Json.bool(a, "update", false)) {
+                    work.submit(() -> update(s));
+                    return "restarting every server with a pack update";
+                }
+                work.submit(s::restart);
+                return "restarting";
             }
             case "console":
-                return server.console((int) Math.min(Json.num(a, "lines", 50), 2000));
+                return s.console((int) Math.min(Json.num(a, "lines", 50), Server.CONSOLE_LINES));
             case "follow":
                 follow = Json.bool(a, "on", true);
                 return follow ? "following the console" : "not following";
@@ -300,27 +317,40 @@ public final class Link {
             case "delete":
                 return files.delete(Json.str(a, "path", ""));
             case "launcher-update":
-                return updateSelf(Json.str(a, "url", ""), Json.str(a, "sha256", ""));
+                return Updater.install(fleet, Json.str(a, "url", ""), Json.str(a, "sha256", ""), Json.bool(a, "reload", true));
+            case "reload":
+                work.submit(fleet::reload);
+                return "reloading the launcher";
             default:
                 throw new IllegalArgumentException("unknown op " + op);
         }
     }
 
-    /** Replaces the launcher jar; the new one runs from the next start of the container. */
-    private Object updateSelf(String from, String sha256) throws Exception {
-        if (!from.startsWith(UPDATE_PREFIX)) throw new IllegalArgumentException("updates only come from " + UPDATE_PREFIX);
-        if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("sha256 missing");
-        if (ownJar == null || !Files.isRegularFile(ownJar)) throw new IllegalStateException("not running from a jar");
-        Path tmp = ownJar.resolveSibling(ownJar.getFileName() + ".new");
-        HttpResponse<Path> r = http.send(HttpRequest.newBuilder(URI.create(from)).timeout(Duration.ofMinutes(2)).build(),
-                HttpResponse.BodyHandlers.ofFile(tmp));
-        if (r.statusCode() != 200) throw new IOException("HTTP " + r.statusCode());
-        String got = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(tmp)));
-        if (!got.equals(sha256)) {
-            Files.deleteIfExists(tmp);
-            throw new IOException("checksum mismatch: " + got);
+    private void update(Server s) {
+        try {
+            fleet.update();
+        } catch (Exception e) {
+            s.note("Pack update failed: " + e.getMessage());
         }
-        Files.move(tmp, ownJar, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        return "installed, active from the next start of the container (" + Instant.now() + ")";
+    }
+
+    static Map<String, Object> status(Server s) {
+        Pack.Info info = null;
+        try {
+            info = s.fleetPack().local();
+        } catch (IOException ignored) {
+            // no pack yet
+        }
+        Map<String, Object> st = Json.map("server", s.name(), "state", s.state().name().toLowerCase(), "detail", s.detail(),
+                "since", s.since().toString(), "pid", s.pid(), "starts", s.starts(),
+                "pack", info == null ? "" : info.version(), "neoforge", info == null ? "" : info.neoforge());
+        if (s.state() == Server.State.RUNNING) {
+            try {
+                st.put("players", s.command("list"));
+            } catch (IOException | RuntimeException e) {
+                st.put("players", "rcon: " + e.getMessage());
+            }
+        }
+        return st;
     }
 }

@@ -21,6 +21,11 @@ public final class Tests {
         rconPrepareKeepsValues();
         keyIsStable();
         configWritesTemplate();
+        serversFromAnOldInstall();
+        cpuSplit();
+        answersFromMinecraft();
+        propertiesKeepTheRest();
+        bootPicksTheCurrentJar();
         System.out.println(passed + " checks passed");
     }
 
@@ -136,9 +141,78 @@ public final class Tests {
         Path dir = Files.createTempDirectory("kwl");
         Config c = Config.load(dir.resolve("kronwerke/launcher.properties"));
         check(Files.exists(dir.resolve("kronwerke/launcher.properties")), "template written");
-        check(c.get("memory").equals("16G") && c.flag("autostart") && c.get("link.url").isEmpty(), "defaults");
-        Files.writeString(dir.resolve("kronwerke/launcher.properties"), "memory=8G\n");
-        check(Config.load(dir.resolve("kronwerke/launcher.properties")).get("memory").equals("8G")
-                && Config.load(dir.resolve("kronwerke/launcher.properties")).flag("restart.on.crash"), "overrides on top of defaults");
+        check(c.get("bus.port").equals("25580") && !c.flag("cpu.pin") && c.get("link.url").isEmpty(), "defaults");
+        Files.writeString(dir.resolve("kronwerke/launcher.properties"), "# hi\nlink.url=wss://x/link\n");
+        Config d = Config.load(dir.resolve("kronwerke/launcher.properties"));
+        check(d.get("link.url").equals("wss://x/link") && d.get("link.name").equals("kronwerke"), "overrides on top of defaults");
+        d.set("link.name", "other");
+        d.set("cpu.pin", "true");
+        String file = Files.readString(dir.resolve("kronwerke/launcher.properties"));
+        check(file.startsWith("# hi\nlink.url=wss://x/link\n") && file.contains("link.name=other") && d.flag("cpu.pin"), "set keeps the rest, got " + file);
+        fails(() -> d.set("a=b", "c"), "no = in keys");
+    }
+
+    static void serversFromAnOldInstall() throws IOException {
+        Path dir = Files.createTempDirectory("kwl");
+        Files.createDirectories(dir.resolve("kronwerke"));
+        Files.writeString(dir.resolve("kronwerke/launcher.properties"), "memory=24G\nautostart=true\n");
+        Config c = Config.load(dir.resolve("kronwerke/launcher.properties"));
+        List<Config.ServerConfig> s = Config.servers(dir, c);
+        check(s.size() == 1 && s.get(0).name().equals("main") && s.get(0).dir().equals("."), "one server, main, in the root");
+        check(s.get(0).cfg().get("memory").equals("24G") && s.get(0).cfg().get("rcon.port").equals("25575")
+                && s.get(0).cfg().get("port").isEmpty(), "memory taken over, ports left alone");
+        Files.writeString(dir.resolve("kronwerke/servers/mining.properties"), "dir=servers/mining\nport=27212\norder=20\n");
+        Files.writeString(dir.resolve("kronwerke/servers/Bad Name.properties"), "dir=x\n");
+        s = Config.servers(dir, c);
+        check(s.size() == 2 && s.get(1).name().equals("mining") && s.get(1).cfg().get("memory").equals("8G")
+                && s.get(1).cfg().get("role").equals("mining"), "a second server with defaults, bad names ignored");
+    }
+
+    static void cpuSplit() {
+        Map<String, List<Integer>> p = Fleet.split(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8), new java.util.LinkedHashMap<>(Map.of("main", 6)));
+        check(p.get("main").size() == 9, "one server gets everything");
+        var shares = new java.util.LinkedHashMap<String, Integer>();
+        shares.put("main", 6);
+        shares.put("mining", 3);
+        p = Fleet.split(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8), shares);
+        check(p.get("main").equals(List.of(0, 1, 2, 3, 4, 5)) && p.get("mining").equals(List.of(6, 7, 8)), "6 to 3, got " + p);
+        shares.put("main", 30);
+        shares.put("mining", 1);
+        p = Fleet.split(List.of(0, 1, 2, 3), shares);
+        check(p.get("mining").size() == 1 && p.get("main").size() == 3, "everyone keeps at least one, got " + p);
+        shares.put("nether", 1);
+        p = Fleet.split(List.of(0, 1), shares);
+        check(p.get("nether").size() == 2, "fewer CPUs than servers: all share");
+        check(Proc.parseCpuList("0-3,8,10-11").equals(List.of(0, 1, 2, 3, 8, 10, 11)) && Proc.cpuList(List.of(1, 2)).equals("1,2"), "cpu lists");
+        check(Fleet.gigabytes("20G") == 20 && Fleet.gigabytes("8192M") == 8 && Fleet.gigabytes("") == 0, "heap sizes");
+    }
+
+    static void answersFromMinecraft() {
+        String tps = "Overworld: 20.000 TPS (12.005 ms/tick)\ndeeperdarker:otherside: 19.500 TPS (40.100 ms/tick)\nOverall: 20.000 TPS (12.388 ms/tick)\n";
+        double[] v = Metrics.tps(tps);
+        check(v[0] == 12.388 && v[1] == 20.0, "overall tick time");
+        var dims = Metrics.dimensions(tps);
+        check(dims.size() == 2 && dims.get(0).get("name").equals("deeperdarker:otherside"), "dimensions, slowest first");
+        check(Metrics.tps("nope")[0] == -1, "no overall line");
+        check(Server.players("There are 2 of a max of 40 players online: Elchi_Sam, KwTester\n").equals(List.of("Elchi_Sam", "KwTester")), "list");
+        check(Server.players("There are 0 of a max of 40 players online: \n").isEmpty(), "nobody online");
+    }
+
+    static void propertiesKeepTheRest() throws IOException {
+        Path f = Files.createTempFile("kwl", ".properties");
+        Files.writeString(f, "#c\nserver-port=25565\nmotd=Hi\n");
+        Server.Properties.set(f, Map.of("server-port", "27212", "accepts-transfers", "true"));
+        String s = Files.readString(f);
+        check(s.equals("#c\nserver-port=27212\nmotd=Hi\naccepts-transfers=true\n"), "changed in place, new ones at the end, got " + s);
+    }
+
+    static void bootPicksTheCurrentJar() throws IOException {
+        Path dir = Files.createTempDirectory("kwl");
+        check(de.kronwerke.boot.Boot.chosenJarFor(dir) == null, "nothing there: the built in one (none from classes)");
+        Files.writeString(dir.resolve("launcher-abc.jar"), "x");
+        Files.writeString(dir.resolve("current"), "launcher-abc.jar\n");
+        check(dir.resolve("launcher-abc.jar").equals(de.kronwerke.boot.Boot.chosenJarFor(dir)), "the named jar");
+        Files.writeString(dir.resolve("current"), "../../etc/passwd\n");
+        check(de.kronwerke.boot.Boot.chosenJarFor(dir) == null, "nothing outside the folder");
     }
 }

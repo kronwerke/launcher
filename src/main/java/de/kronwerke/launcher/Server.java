@@ -1,8 +1,9 @@
 package de.kronwerke.launcher;
 
-import java.io.BufferedReader;
+import de.kronwerke.boot.Boot;
+import de.kronwerke.boot.Pump;
+
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,52 +12,74 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Runs Minecraft as a child process and keeps it running. Everything the child prints goes
- * to the launcher's own output, so the panel's console looks as before.
+ * One Minecraft server: its folder, its process and the loop that keeps it running. The
+ * {@link Fleet} owns the pack and decides the order; a server only starts, stops and watches
+ * its own process.
+ * <p>
+ * The process is held in a {@link Pump}, so a launcher reload hands it to the next version
+ * without a restart.
  */
 public final class Server {
     public enum State { STOPPED, UPDATING, STARTING, RUNNING, STOPPING, CRASHED }
 
-    private final Path root;
+    private final String name;
+    private final Path dir;
     private final Config cfg;
-    private final String java;
-    private final Consumer<String> out;
-    private final Pack pack;
+    private final Fleet fleet;
 
     private final Object lock = new Object();
     private State state = State.STOPPED;
     private Instant since = Instant.now();
     private String detail = "";
-    private Process child;
-    private OutputStream childIn;
+    private Pump child;
     private boolean wantRunning;
-    private boolean updateNext;
-    private boolean exitWhenStopped;
+    private boolean leaving;
+    private boolean detaching;
+    private Thread loop;
     private final Deque<Instant> crashes = new ArrayDeque<>();
     private int starts;
 
     private final Deque<String> console = new ArrayDeque<>();
-    private static final int CONSOLE_LINES = 2000;
+    static final int CONSOLE_LINES = 5000;
     private final List<Consumer<String>> consoleListeners = new ArrayList<>();
     private final List<Runnable> stateListeners = new ArrayList<>();
+    private final Metrics metrics = new Metrics();
 
-    public Server(Path root, Config cfg, String java, Consumer<String> out) {
-        this.root = root;
-        this.cfg = cfg;
-        this.java = java;
-        this.out = out;
-        this.pack = new Pack(root, java, this::print);
-    }
-
-    public Pack pack() {
-        return pack;
+    Server(Config.ServerConfig sc, Path root, Fleet fleet) {
+        this.name = sc.name();
+        this.cfg = sc.cfg();
+        this.dir = root.resolve(sc.dir()).normalize();
+        this.fleet = fleet;
     }
 
     // ---- what others see ----
+
+    public String name() {
+        return name;
+    }
+
+    public Path dir() {
+        return dir;
+    }
+
+    public Config config() {
+        return cfg;
+    }
+
+    Pack fleetPack() {
+        return fleet.pack();
+    }
+
+    public Metrics metrics() {
+        return metrics;
+    }
 
     public State state() {
         synchronized (lock) {
@@ -82,16 +105,26 @@ public final class Server {
         }
     }
 
+    public boolean wanted() {
+        synchronized (lock) {
+            return wantRunning;
+        }
+    }
+
     public long pid() {
         synchronized (lock) {
-            return child != null && child.isAlive() ? child.pid() : 0;
+            return child != null && child.process().isAlive() ? child.process().pid() : 0;
         }
+    }
+
+    public Path properties() {
+        return dir.resolve("server.properties");
     }
 
     public List<String> console(int n) {
         synchronized (console) {
             List<String> all = new ArrayList<>(console);
-            return all.subList(Math.max(0, all.size() - n), all.size());
+            return new ArrayList<>(all.subList(Math.max(0, all.size() - n), all.size()));
         }
     }
 
@@ -101,15 +134,21 @@ public final class Server {
         }
     }
 
+    public void removeConsole(Consumer<String> c) {
+        synchronized (consoleListeners) {
+            consoleListeners.remove(c);
+        }
+    }
+
     public void onState(Runnable r) {
         synchronized (stateListeners) {
             stateListeners.add(r);
         }
     }
 
-    /** A line for the console: the panel and the ring buffer. */
+    /** A line for the console: the panel, the ring buffer, whoever follows. */
     void print(String line) {
-        out.accept(line);
+        fleet.out(name, line);
         synchronized (console) {
             console.addLast(line);
             while (console.size() > CONSOLE_LINES) console.removeFirst();
@@ -118,20 +157,29 @@ public final class Server {
         synchronized (consoleListeners) {
             ls = new ArrayList<>(consoleListeners);
         }
-        for (Consumer<String> c : ls) c.accept(line);
+        for (Consumer<String> c : ls) {
+            try {
+                c.accept(line);
+            } catch (RuntimeException ignored) {
+                // one listener must not stop the others
+            }
+        }
+        watch(line);
     }
 
     void note(String msg) {
         print("[Kronwerke] " + msg);
     }
 
-    private void set(State s, String why) {
+    void set(State s, String why) {
         synchronized (lock) {
             state = s;
             detail = why;
             since = Instant.now();
+            lock.notifyAll();
         }
         note("Minecraft " + s.name().toLowerCase() + (why.isEmpty() ? "" : ": " + why));
+        fleet.changed(this);
         List<Runnable> ls;
         synchronized (stateListeners) {
             ls = new ArrayList<>(stateListeners);
@@ -141,132 +189,238 @@ public final class Server {
 
     // ---- control ----
 
-    public void start(boolean update) {
+    /** Wants the server running. Clears the crash count, so it also starts after giving up. */
+    public void start() {
         synchronized (lock) {
             wantRunning = true;
-            updateNext |= update;
             crashes.clear();
             lock.notifyAll();
         }
     }
 
+    /** Stops Minecraft and keeps it stopped. Returns when it is down. */
     public void stop() {
         synchronized (lock) {
             wantRunning = false;
             lock.notifyAll();
         }
         stopChild();
+        settle();
     }
 
-    public void restart(boolean update) {
+    /** Waits until the supervisor has seen the exit, so the next state change comes after its own. */
+    private void settle() {
+        long until = System.currentTimeMillis() + 10_000;
         synchronized (lock) {
-            updateNext |= update;
+            while ((child != null || state == State.STOPPING) && System.currentTimeMillis() < until) {
+                try {
+                    lock.wait(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
         }
-        stopChild();
-        start(false);
     }
 
-    /** The panel's stop: stop Minecraft, then end the launcher so the container stops. */
-    public void shutdown() {
+    /** Stops Minecraft and starts it again. */
+    public void restart() {
+        stopChild();
+        start();
+    }
+
+    /** The end: stop Minecraft and the loop with it. */
+    void leave() {
         synchronized (lock) {
-            exitWhenStopped = true;
+            leaving = true;
             wantRunning = false;
             lock.notifyAll();
         }
         stopChild();
+        join();
+    }
+
+    /** For a reload: let go of the process without stopping it. */
+    void detach() {
+        Pump p;
+        synchronized (lock) {
+            detaching = true;
+            p = child;
+            lock.notifyAll();
+        }
+        Map<String, Object> shared = Boot.shared();
+        if (p != null && p.process().isAlive()) {
+            p.detach();
+            shared.put("pump:" + name, p);
+        } else {
+            shared.remove("pump:" + name);
+        }
+        synchronized (console) {
+            shared.put("console:" + name, new ArrayList<>(console));
+        }
+        synchronized (lock) {
+            shared.put("server:" + name, Json.write(Json.map("state", state.name(), "detail", detail, "since", since.toString(),
+                    "starts", starts, "want", wantRunning)));
+        }
+        if (loop != null) loop.interrupt();
+        join();
+    }
+
+    private void join() {
+        Thread t = loop;
+        if (t == null || t == Thread.currentThread()) return;
+        try {
+            t.join(200_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /** Sends a console line to Minecraft. */
     public boolean send(String line) {
-        OutputStream in;
+        Pump p;
         synchronized (lock) {
-            in = childIn;
+            p = child;
         }
-        if (in == null) return false;
-        try {
-            synchronized (in) {
-                in.write((line + "\n").getBytes(StandardCharsets.UTF_8));
-                in.flush();
-            }
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        return p != null && p.send(line);
+    }
+
+    /** Runs a command over RCON and returns the answer. */
+    public String command(String cmd) throws IOException {
+        if (state() != State.RUNNING) throw new IllegalStateException(name + " is " + state().name().toLowerCase());
+        return Rcon.command(properties(), cmd);
     }
 
     private void stopChild() {
-        Process p;
+        Pump p;
         synchronized (lock) {
             p = child;
-            if (p == null || !p.isAlive()) return;
+            if (p == null || !p.process().isAlive()) return;
             if (state != State.STOPPING) {
                 state = State.STOPPING;
                 since = Instant.now();
             }
         }
         note("Stopping Minecraft");
-        send("stop");
+        fleet.changed(this);
+        p.send("stop");
         try {
-            if (!p.waitFor(150, TimeUnit.SECONDS)) {
+            if (!p.process().waitFor(150, TimeUnit.SECONDS)) {
                 note("Minecraft did not stop in 150 seconds, killing it");
-                p.destroyForcibly();
-                p.waitFor(20, TimeUnit.SECONDS);
+                p.process().destroyForcibly();
+                p.process().waitFor(20, TimeUnit.SECONDS);
             }
+            // the last lines still arrive after the exit
+            p.awaitEnd();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
 
-    /** The supervisor loop. Returns when the launcher should exit. */
-    public void run() throws InterruptedException {
+    /** Starts the supervisor thread, after taking over a process a previous launcher left running. */
+    void begin() {
+        Object adopted = Boot.shared().get("pump:" + name);
+        Object saved = Boot.shared().get("server:" + name);
+        if (Boot.shared().remove("console:" + name) instanceof List<?> lines) {
+            synchronized (console) {
+                for (Object l : lines) console.addLast(String.valueOf(l));
+            }
+        }
         synchronized (lock) {
             wantRunning = cfg.flag("autostart");
-        }
-        while (true) {
-            boolean update;
-            synchronized (lock) {
-                while (!wantRunning && !exitWhenStopped) lock.wait();
-                if (exitWhenStopped) return;
-                update = updateNext || starts == 0;
-                updateNext = false;
-            }
-            int code = runOnce(update);
-            boolean crashed;
-            synchronized (lock) {
-                if (exitWhenStopped) {
-                    set(State.STOPPED, "exit code " + code);
-                    return;
+            if (saved instanceof String s) {
+                Map<String, Object> m = Json.object(s);
+                starts = (int) Json.num(m, "starts", 0);
+                wantRunning = Json.bool(m, "want", wantRunning);
+                try {
+                    state = State.valueOf(Json.str(m, "state", "STOPPED"));
+                    since = Instant.parse(Json.str(m, "since", Instant.now().toString()));
+                } catch (RuntimeException ignored) {
+                    // an older launcher's names
                 }
-                crashed = wantRunning && state != State.STOPPING;
+                detail = Json.str(m, "detail", "");
             }
-            if (!crashed) {
-                String why = code != Integer.MIN_VALUE ? "exit code " + code : detail().startsWith("eula") ? detail() : "";
-                set(State.STOPPED, why);
-                continue;
+            if (adopted instanceof Pump p && p.process().isAlive()) {
+                child = p;
+                if (state != State.RUNNING && state != State.STARTING) state = State.RUNNING;
+            } else if (state == State.RUNNING || state == State.STARTING || state == State.STOPPING) {
+                state = State.STOPPED;
             }
-            set(State.CRASHED, code == Integer.MIN_VALUE ? detail() : "exit code " + code);
-            boolean again;
-            synchronized (lock) {
-                Instant now = Instant.now();
-                crashes.addLast(now);
-                while (!crashes.isEmpty() && crashes.peekFirst().isBefore(now.minusSeconds(600))) crashes.removeFirst();
-                again = cfg.flag("restart.on.crash") && crashes.size() < 3;
-                if (!again) wantRunning = false;
+        }
+        Pump p = adopted instanceof Pump a ? a : null;
+        loop = new Thread(() -> supervise(p), "server-" + name);
+        loop.start();
+    }
+
+    /** The supervisor loop: start, wait, start again after a crash. */
+    private void supervise(Pump adopted) {
+        try {
+            if (adopted != null && adopted.process().isAlive()) {
+                note("Took over the running Minecraft (pid " + adopted.process().pid() + ")");
+                adopted.attach(this::print);
+                fleet.applyCpu(this);
+                if (afterExit(waitFor(adopted))) return;
             }
-            if (again) {
-                note("Starting again in 15 seconds");
+            while (true) {
                 synchronized (lock) {
-                    lock.wait(15000);
+                    while (!wantRunning && !leaving && !detaching) lock.wait();
+                    if (leaving || detaching) return;
                 }
-            } else {
-                note("Three crashes in ten minutes: staying stopped until someone starts it");
+                int code = runOnce();
+                if (afterExit(code)) return;
             }
+        } catch (InterruptedException e) {
+            // detached for a reload, or the launcher is ending
         }
+    }
+
+    /** Handles an ended process. True when the loop should end. */
+    private boolean afterExit(int code) throws InterruptedException {
+        boolean crashed, ending;
+        synchronized (lock) {
+            child = null;
+            if (detaching) return true;
+            ending = leaving;
+            crashed = wantRunning && state != State.STOPPING && !leaving;
+        }
+        if (ending) {
+            set(State.STOPPED, code == Integer.MIN_VALUE ? "" : "exit code " + code);
+            return true;
+        }
+        if (!crashed) {
+            String why = code != Integer.MIN_VALUE ? "exit code " + code : detail().startsWith("eula") ? detail() : "";
+            set(State.STOPPED, why);
+            return false;
+        }
+        set(State.CRASHED, code == Integer.MIN_VALUE ? detail() : "exit code " + code);
+        boolean again;
+        synchronized (lock) {
+            Instant now = Instant.now();
+            crashes.addLast(now);
+            while (!crashes.isEmpty() && crashes.peekFirst().isBefore(now.minusSeconds(600))) crashes.removeFirst();
+            again = cfg.flag("restart.on.crash") && crashes.size() < 3;
+            if (!again) wantRunning = false;
+        }
+        if (again) {
+            note("Starting again in 15 seconds");
+            synchronized (lock) {
+                lock.wait(15000);
+            }
+        } else {
+            note("Three crashes in ten minutes: staying stopped until someone starts it");
+        }
+        return false;
+    }
+
+    private int waitFor(Pump p) throws InterruptedException {
+        int code = p.process().waitFor();
+        p.awaitEnd();
+        return code;
     }
 
     private boolean eulaAccepted() {
         try {
-            for (String l : Files.readAllLines(root.resolve("eula.txt"))) {
+            for (String l : Files.readAllLines(dir.resolve("eula.txt"))) {
                 if (l.trim().equalsIgnoreCase("eula=true")) return true;
             }
         } catch (IOException e) {
@@ -275,36 +429,13 @@ public final class Server {
         return false;
     }
 
-    /** Falls back to "running" when no RCON line follows "Done" within a minute. */
-    private void runningSoon(Process p) {
-        Thread t = new Thread(() -> {
-            try {
-                Thread.sleep(60_000);
-            } catch (InterruptedException e) {
-                return;
-            }
-            if (p.isAlive() && state() == State.STARTING) set(State.RUNNING, "no RCON line seen");
-        }, "running-fallback");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /** Update, start, wait for the exit. Integer.MIN_VALUE when it never started. */
-    private int runOnce(boolean update) {
+    /** Prepare, start, wait for the exit. Integer.MIN_VALUE when it never started. */
+    private int runOnce() throws InterruptedException {
         Pack.Info info;
         try {
-            String url = cfg.get("pack.url");
-            if (update && !url.isEmpty()) {
-                set(State.UPDATING, "pack");
-                info = pack.fetch(url);
-                pack.update(url);
-            } else {
-                info = pack.local();
-            }
-            if (info == null) throw new IOException("no pack.toml yet and pack.url is empty");
-            pack.ensureNeoForge(info.neoforge());
-            Rcon.prepare(root.resolve("server.properties"));
-        } catch (Exception e) {
+            info = fleet.ready(this);
+            prepare();
+        } catch (IOException | RuntimeException e) {
             synchronized (lock) {
                 detail = "preparing: " + e.getMessage();
             }
@@ -312,35 +443,25 @@ public final class Server {
             return Integer.MIN_VALUE;
         }
 
-        List<String> cmd = new ArrayList<>();
-        cmd.add(java);
-        String mem = cfg.get("memory");
-        if (!mem.isEmpty()) {
-            cmd.add("-Xms" + mem);
-            cmd.add("-Xmx" + mem);
-        }
-        for (String a : cfg.get("jvm.args").split("\\s+")) if (!a.isBlank()) cmd.add(a);
-        Path userArgs = root.resolve("user_jvm_args.txt");
-        if (Files.exists(userArgs)) cmd.add("@user_jvm_args.txt");
-        cmd.add("@" + root.relativize(pack.argsFile(info.neoforge())));
-        cmd.add("nogui");
-
+        List<String> cmd = fleet.commandLine(this, info);
         synchronized (lock) {
             // stopped while the pack was updating
-            if (!wantRunning || exitWhenStopped) return Integer.MIN_VALUE;
+            if (!wantRunning || leaving || detaching) return Integer.MIN_VALUE;
         }
         if (!eulaAccepted()) {
-            note("Minecraft's EULA is not accepted yet. Read https://aka.ms/MinecraftEULA, put eula=true into eula.txt, then `kronwerke start`.");
+            note("Minecraft's EULA is not accepted yet. Read https://aka.ms/MinecraftEULA, put eula=true into eula.txt, then start it again.");
             synchronized (lock) {
                 wantRunning = false;
                 detail = "eula.txt is not accepted";
             }
             return Integer.MIN_VALUE;
         }
-        Process p;
+        Pump p;
+        doneAt = 0;
         try {
             set(State.STARTING, "pack " + info.version() + ", NeoForge " + info.neoforge());
-            p = new ProcessBuilder(cmd).directory(root.toFile()).redirectErrorStream(true).start();
+            Process proc = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true).start();
+            p = Pump.start(proc, name);
         } catch (IOException e) {
             synchronized (lock) {
                 detail = "start: " + e.getMessage();
@@ -350,35 +471,103 @@ public final class Server {
         }
         synchronized (lock) {
             child = p;
-            childIn = p.getOutputStream();
             starts++;
         }
-        try (BufferedReader r = p.inputReader(StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                print(line);
-                if (state() != State.STARTING) continue;
-                // RCON comes up right after "Done"; commands only work from then on
-                if (line.contains("RCON running on")) {
-                    set(State.RUNNING, "");
-                } else if (line.contains("Done (") && line.contains("For help, type")) {
-                    runningSoon(p);
+        metrics.reset();
+        p.attach(this::print);
+        fleet.applyCpu(this);
+        runningSoon(p);
+        return waitFor(p);
+    }
+
+    /** Falls back to "running" when no RCON line follows within two minutes of "Done". */
+    private void runningSoon(Pump p) {
+        Thread t = new Thread(() -> {
+            long until = System.currentTimeMillis() + 30 * 60_000;
+            try {
+                while (System.currentTimeMillis() < until && p.process().isAlive() && state() == State.STARTING) {
+                    Thread.sleep(5000);
+                    if (doneAt > 0 && System.currentTimeMillis() - doneAt > 120_000) {
+                        set(State.RUNNING, "no RCON line seen");
+                        return;
+                    }
+                }
+            } catch (InterruptedException ignored) {
+                // gone
+            }
+        }, "running-fallback-" + name);
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private volatile long doneAt;
+    private static final Pattern LIST = Pattern.compile("There are (\\d+) of a max of (\\d+) players online:?(.*)");
+
+    /** Reads the console for the moments that matter. */
+    private void watch(String line) {
+        if (state() == State.STARTING) {
+            // RCON comes up right after "Done"; commands only work from then on
+            if (line.contains("RCON running on")) {
+                set(State.RUNNING, "");
+            } else if (line.contains("Done (") && line.contains("For help, type")) {
+                doneAt = System.currentTimeMillis();
+            }
+        }
+    }
+
+    /** Ports, RCON and the files a second server needs, before every start. */
+    void prepare() throws IOException {
+        Path props = properties();
+        Map<String, String> set = new java.util.LinkedHashMap<>();
+        if (!cfg.get("port").isEmpty()) set.put("server-port", cfg.get("port"));
+        if (!cfg.get("rcon.port").isEmpty()) set.put("rcon.port", cfg.get("rcon.port"));
+        if (!"main".equals(cfg.get("role"))) set.put("accepts-transfers", "true");
+        if (!set.isEmpty()) Properties.set(props, set);
+        Rcon.prepare(props);
+        if (!cfg.get("voice.port").isEmpty()) {
+            Path voice = dir.resolve("config/voicechat/voicechat-server.properties");
+            if (Files.isSymbolicLink(dir.resolve("config/voicechat"))) {
+                throw new IOException("config/voicechat is shared with another server; give this server its own folder for voice.port");
+            }
+            if (Files.exists(voice)) Properties.set(voice, Map.of("port", cfg.get("voice.port")));
+        }
+    }
+
+    /** Parses the answer of `list`: players online and their names. */
+    static List<String> players(String answer) {
+        Matcher m = LIST.matcher(answer.replace('\n', ' '));
+        if (!m.find()) return List.of();
+        List<String> names = new ArrayList<>();
+        for (String n : m.group(3).split(",")) {
+            if (!n.isBlank()) names.add(n.trim());
+        }
+        return names;
+    }
+
+    /** Small helper to change keys in a .properties file without touching the rest. */
+    static final class Properties {
+        static void set(Path file, Map<String, String> values) throws IOException {
+            List<String> lines = Files.exists(file) ? new ArrayList<>(Files.readAllLines(file, StandardCharsets.ISO_8859_1)) : new ArrayList<>();
+            Map<String, String> left = new java.util.LinkedHashMap<>(values);
+            boolean changed = false;
+            for (int i = 0; i < lines.size(); i++) {
+                String l = lines.get(i);
+                int eq = l.indexOf('=');
+                if (eq <= 0 || l.startsWith("#")) continue;
+                String k = l.substring(0, eq).trim();
+                if (left.containsKey(k)) {
+                    String v = left.remove(k);
+                    if (!l.substring(eq + 1).trim().equals(v)) {
+                        lines.set(i, k + "=" + v);
+                        changed = true;
+                    }
                 }
             }
-        } catch (IOException ignored) {
-            // the child is gone
+            for (var e : left.entrySet()) {
+                lines.add(e.getKey() + "=" + e.getValue());
+                changed = true;
+            }
+            if (changed) Files.write(file, lines, StandardCharsets.ISO_8859_1);
         }
-        int code;
-        try {
-            code = p.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            code = -1;
-        }
-        synchronized (lock) {
-            child = null;
-            childIn = null;
-        }
-        return code;
     }
 }
