@@ -274,9 +274,12 @@ public final class Schedule {
         List<Server> targets = targets(t);
         switch (action) {
             case "restart" -> targets.forEach(s -> {
-                if (s.wanted()) fleet.submit(s::restart);
+                // a world being reset or backed up is not restarted in between
+                if (s.wanted() && !fleet.backups().busy(s)) fleet.submit(s::restart);
             });
-            case "stop" -> targets.forEach(s -> fleet.submit(s::stop));
+            case "stop" -> targets.forEach(s -> {
+                if (!fleet.backups().busy(s)) fleet.submit(s::stop);
+            });
             case "start" -> targets.forEach(Server::start);
             case "command" -> targets.forEach(s -> {
                 try {

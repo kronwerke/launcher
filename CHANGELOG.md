@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+- A scheduled restart or stop leaves a server alone while its world is being reset or backed up.
+
 ## 0.7.0
 
 - World resets: the schedule's new action "reset" (for one server, never the first) and a button on a server's page. The players are sent to another server of the network first when a mod on the bus can (`evacuate`), the server stops, its world moves to `<world>.reset-<time>`, the reset world before that is deleted, the server starts with a new world. An alert "reset" for the webhook.
