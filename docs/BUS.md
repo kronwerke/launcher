@@ -80,7 +80,7 @@ Then, from the other servers of the network, each with `from`, `label` and `colo
 
 | op | Fields | When |
 | --- | --- | --- |
-| `chat` | `player`, `uuid`, `text` | A chat line on another server |
+| `chat` | `player`, `uuid`, `text`, `extra` | A chat line on another server |
 | `join`, `leave` | `player`, `uuid`, and `to` or `via` if the sender gave them | A player came or went |
 | `players` | `list` | Another server's players, for the tab list. An empty list when that server left the bus |
 | `message` | `topic`, `data`, `id` | A mod's own message (below) |
@@ -93,8 +93,8 @@ Then, from the other servers of the network, each with `from`, `label` and `colo
 
 | op | Fields | Effect |
 | --- | --- | --- |
-| `chat` | `player`, `uuid`, `text`, `scope` | `scope` is `network` (default) to share it, anything else (`radius`, `server`) only for the console's chat log |
-| `join`, `leave` | `player`, `uuid`, optional `to`, `via` | Shown on the others when `sync.joins` is on. `to` says a player moved to another server instead of leaving |
+| `chat` | `player`, `uuid`, `text`, `scope`, optional `extra` | `scope` is `network` (default) to share it, anything else (`radius`, `server`) only for the console's chat log. `extra` (an object) reaches the other mods untouched, for a rank, say |
+| `join`, `leave` | `player`, `uuid`, optional `to`, `via`, `extra` | Shown on the others when `sync.joins` is on. `to` says a player moved to another server instead of leaving |
 | `players` | `list` of objects with at least `name` and `uuid` | Replaces this server's list; sent to the others when `sync.tablist` is on. Send it on every join and leave, and once after signing in |
 | `send` | `to` (a server or `*`), `topic`, `data`, optional `id` | Delivered as `message` to that server's mod. Topics starting with `player.` need `sync.players` on both ends |
 | `event` | `text` | A line in the console's timeline |

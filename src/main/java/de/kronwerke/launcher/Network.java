@@ -179,7 +179,7 @@ public final class Network {
         if (line.indexOf("]: ") < 0) return;
         Matcher m = CHAT.matcher(line);
         if (m.find()) {
-            chat(s, m.group(1), "", m.group(2), "network");
+            chat(s, m.group(1), "", m.group(2), "network", null);
             return;
         }
         m = JOIN.matcher(line);
@@ -191,12 +191,13 @@ public final class Network {
         if (m.find()) presence(s, "leave", m.group(1), "", Map.of());
     }
 
-    void chat(Server s, String player, String uuid, String text, String scope) {
+    void chat(Server s, String player, String uuid, String text, String scope, Object extra) {
         Policy p = policy(s);
         record(Json.map("kind", "chat", "server", s.name(), "player", player, "text", text, "scope", scope));
         if (!p.inNetwork() || !p.chat().equals("network") || !scope.equals("network")) return;
         Map<String, Object> msg = Json.map("op", "chat", "from", s.name(), "label", label(s), "color", color(s),
                 "player", player, "uuid", uuid, "text", text);
+        if (extra instanceof Map<?, ?>) msg.put("extra", extra);
         for (Server o : mates(s)) {
             if (policy(o).chat().equals("network")) deliver(o, msg);
         }
@@ -542,10 +543,11 @@ public final class Network {
         String op = Json.str(m, "op", "");
         switch (op) {
             case "ping" -> p.send(Json.map("op", "pong", "t", m.get("t")));
-            case "chat" -> chat(s, Json.str(m, "player", ""), Json.str(m, "uuid", ""), Json.str(m, "text", ""), Json.str(m, "scope", "network"));
+            case "chat" -> chat(s, Json.str(m, "player", ""), Json.str(m, "uuid", ""), Json.str(m, "text", ""), Json.str(m, "scope", "network"), m.get("extra"));
             case "join", "leave" -> {
                 Map<String, Object> extra = new LinkedHashMap<>();
                 for (String k : List.of("to", "via")) if (m.get(k) != null) extra.put(k, String.valueOf(m.get(k)));
+                if (m.get("extra") instanceof Map<?, ?> x) extra.put("extra", x);
                 presence(s, op, Json.str(m, "player", ""), Json.str(m, "uuid", ""), extra);
             }
             case "players" -> {

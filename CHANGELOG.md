@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Mods may send `extra` with chat, joins and leaves (a rank, say); the other mods get it untouched.
+
 ## 0.5.0
 
 Networks: servers that belong together share chat, joins, lists and, with a mod, the tab list and player data. Details in [docs/BUS.md](docs/BUS.md).
