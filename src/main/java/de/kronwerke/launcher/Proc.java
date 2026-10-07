@@ -96,12 +96,14 @@ public final class Proc {
         try {
             Path cur = Path.of("/sys/fs/cgroup/memory.current"), lim = Path.of("/sys/fs/cgroup/memory.max");
             if (Files.exists(cur)) {
-                used = Long.parseLong(Files.readString(cur).trim());
+                // like docker stats: the page cache the kernel can drop at any time does not count
+                used = Long.parseLong(Files.readString(cur).trim()) - Math.max(0, cgroupStat(Path.of("/sys/fs/cgroup/memory.stat"), "inactive_file"));
                 String m = Files.readString(lim).trim();
                 max = m.equals("max") ? -1 : Long.parseLong(m);
             } else {
                 Path u1 = Path.of("/sys/fs/cgroup/memory/memory.usage_in_bytes"), l1 = Path.of("/sys/fs/cgroup/memory/memory.limit_in_bytes");
-                if (Files.exists(u1)) used = Long.parseLong(Files.readString(u1).trim());
+                if (Files.exists(u1)) used = Long.parseLong(Files.readString(u1).trim())
+                        - Math.max(0, cgroupStat(Path.of("/sys/fs/cgroup/memory/memory.stat"), "total_inactive_file"));
                 if (Files.exists(l1)) {
                     long l = Long.parseLong(Files.readString(l1).trim());
                     max = l > (1L << 50) ? -1 : l;
@@ -110,11 +112,59 @@ public final class Proc {
         } catch (IOException | RuntimeException ignored) {
             // unknown
         }
+        // a game panel tells the container's share in SERVER_MEMORY (MB), the clearest number there is
+        String panel = System.getenv("SERVER_MEMORY");
+        if (panel != null && panel.matches("[1-9][0-9]*")) max = Long.parseLong(panel) << 20;
         if (max < 0) {
             long total = statusField(Path.of("/proc/meminfo"), "MemTotal:");
             if (total > 0) max = total;
         }
         return new long[] {used, max};
+    }
+
+    static long cgroupStat(Path file, String key) {
+        try {
+            for (String l : Files.readAllLines(file)) {
+                if (l.startsWith(key + " ")) return Long.parseLong(l.substring(key.length() + 1).trim());
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // not there
+        }
+        return -1;
+    }
+
+    /** Bytes in a folder and everything below it, links not followed. Slow on big worlds: call it rarely. */
+    public static long folderSize(Path dir) {
+        final long[] sum = {0};
+        try {
+            Files.walkFileTree(dir, new java.nio.file.SimpleFileVisitor<>() {
+                @Override
+                public java.nio.file.FileVisitResult visitFile(Path f, java.nio.file.attribute.BasicFileAttributes a) {
+                    if (a.isRegularFile()) sum[0] += a.size();
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public java.nio.file.FileVisitResult visitFileFailed(Path f, IOException e) {
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException ignored) {
+            // what was counted so far
+        }
+        return sum[0];
+    }
+
+    /** Whether server.properties turns the whitelist on. */
+    public static boolean whitelistOn(Path serverProperties) {
+        try {
+            for (String l : Files.readAllLines(serverProperties, StandardCharsets.ISO_8859_1)) {
+                if (l.startsWith("white-list=")) return l.substring(11).trim().equals("true");
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // no file
+        }
+        return false;
     }
 
     /** The CPUs this process may run on (Cpus_allowed_list), or an empty list. */

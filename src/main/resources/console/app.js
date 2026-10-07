@@ -18,7 +18,9 @@ function h(tag, attrs, ...kids) {
     for (const [k, v] of Object.entries(attrs)) {
       if (v == null || v === false) continue;
       if (k === "class") el.className = v;
-      else if (k === "style" && typeof v === "object") for (const [p, x] of Object.entries(v)) el.style.setProperty(p, x);
+      else if (k === "style" && typeof v === "object") {
+        for (const [p, x] of Object.entries(v)) el.style.setProperty(p.startsWith("--") ? p : p.replace(/[A-Z]/g, c => "-" + c.toLowerCase()), x);
+      }
       else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
       else if (k === "html") el.innerHTML = v;
       else if (v === true) el.setAttribute(k, "");
@@ -186,6 +188,10 @@ const EN = {
   " Kerne": " cores",
   " Spieler": " players",
   " Kernen": " cores",
+  " von ": " of ",
+  " sichtbar": " visible",
+  "wird gezählt": "counting",
+  " belegt": " used",
   "Arbeitsspeicher": "Memory",
   "Festplatte": "Disk",
   "Zeitleiste": "Timeline",
@@ -391,7 +397,75 @@ const EN = {
   "gesperrt": "locked",
   "Season": "Season",
   "schlummert": "slumbering",
-  ", schlummert": ", slumbering"
+  ", schlummert": ", slumbering",
+  "Spieler suchen": "Search players",
+  "Jeder, den der Server kennt: online, auf der Whitelist, Operatoren, Gebannte und wer in den letzten 30 Tagen da war.": "Everyone the server knows: online, whitelisted, operators, banned, and whoever was here in the last 30 days.",
+  "Zur Whitelist hinzufügen": "Add to whitelist",
+  "Hinzufügen": "Add",
+  "Minecraft-Name": "Minecraft name",
+  " ist auf der Whitelist": " is on the whitelist",
+  "Gebannt": "Banned",
+  "eigener Platz, ": "own place, ",
+  " Plätze": " slots",
+  "eingeladen von ": "invited by ",
+  "Niemand passt zur Suche.": "Nobody matches the search.",
+  "Hier ist niemand.": "Nobody here.",
+  "Status": "Status",
+  "Plätze": "Slots",
+  "Zuletzt da": "Last seen",
+  "jetzt": "now",
+  "Gerade auf ": "Right now on ",
+  "Zuletzt da ": "Last seen ",
+  "War noch nicht da": "Has not been here yet",
+  "Schließen": "Close",
+  "Grund: ": "Reason: ",
+  "Eigener Platz. ": "Own place. ",
+  "Streamer. ": "Streamer. ",
+  " Plätzen vergeben.": " slots given.",
+  "Eingeladen von ": "Invited by ",
+  "Kein Platz in Kronwerke.": "No place in Kronwerke.",
+  " als Streamer anlegen?": ": add as streamer?",
+  "Bekommt einen eigenen Platz und so viele Plätze für Zuschauer. Leer heißt Standard.": "Gets a place of their own and this many slots for viewers. Empty means the default.",
+  "Anlegen": "Add",
+  " angelegt": " added",
+  "Als Streamer anlegen": "Add as streamer",
+  "Plätze verwalten": "Manage slots",
+  "Platz frei": "Slot freed",
+  "Platz bei ": "Free the slot of ",
+  " freigeben": "",
+  "Aktionen": "Actions",
+  "Von der Whitelist": "Off the whitelist",
+  "Auf der Whitelist": "On the whitelist",
+  "Von der Whitelist nehmen": "Remove from whitelist",
+  "Zur Whitelist": "Whitelist",
+  "Op entziehen": "Remove op",
+  "Op geben": "Make op",
+  "Entbannt": "Unbanned",
+  " bannen?": ": ban?",
+  "Bannen": "Ban",
+  " gebannt": " banned",
+  "Entbannen": "Unban",
+  "Streamer anlegen": "Add streamer",
+  "Der Minecraft-Name. Plätze danach auf der Karte.": "Their Minecraft name. Slots afterwards on the card.",
+  "Standard: ": "Default: ",
+  " Plätze pro Streamer.": " slots per streamer.",
+  "eigener Platz": "own place",
+  "Streamer": "Streamer",
+  " entfernen": ": remove",
+  " entfernen?": ": remove?",
+  "Der Platz bei ": "The slot of ",
+  " wird frei, der Spieler fliegt von der Whitelist.": " is freed, the player leaves the whitelist.",
+  "Spieler für ": "Player for ",
+  " eingeladen": " invited",
+  "Der eigene Platz und alle Plätze, die ": "The place of their own and every slot ",
+  " vergeben hat, fallen weg.": " gave away are gone.",
+  " entfernt": " removed",
+  "Noch keine Streamer.": "No streamers yet.",
+  "Online": "Online",
+  "Whitelist": "Whitelist",
+  "Operatoren": "Operators",
+  "Streamer und Plätze": "Streamers and slots",
+  "Spieler einladen": "Invite player"
   };
 function T(s) {
   if (s == null) return s;
@@ -890,7 +964,7 @@ function pageOverview(main) {
             h("span", null, s.state === "running" && s.last?.tps >= 0 ? fmt.num(s.last.tps) + " TPS" : T("pro Tick")))),
         canvas,
         h("div", { class: "pulse-foot" },
-          h("span", null, "CPU ", h("b", null, s.last?.cpu >= 0 ? fmt.num(s.last.cpu / 100) + " Kerne" : "?"), " ", spark(S.metrics[s.name] || [], "cpu", resolveColor(colorOf(s.name)))),
+          h("span", null, "CPU ", h("b", null, s.last?.cpu >= 0 ? fmt.num(s.last.cpu) + " %" : "?"), " ", spark(S.metrics[s.name] || [], "cpu", resolveColor(colorOf(s.name)))),
           h("span", null, "RAM ", h("b", null, fmt.bytes(s.last?.rss)), " von ", s.memory || "?"),
           h("span", null, h("b", null, s.players.length), s.players.length === 1 ? " Spieler" : T(" Spieler")),
           s.players.length ? heads(s.players) : null,
@@ -913,9 +987,9 @@ function pageOverview(main) {
       h("section", { class: "panel" },
         h("header", null, h("h2", null, "Container"), h("p", null, "Launcher " + S.overview.launcher.version)),
         h("div", { class: "body bars" },
-          bar("CPU", (cpu >= 0 ? fmt.num(cpu) : "?") + " von " + fmt.num(c.cpuLimit, 0) + T(" Kernen"), cpuPct),
-          bar(T("Arbeitsspeicher"), fmt.bytes(c.memory) + " von " + fmt.bytes(c.memoryMax), memPct),
-          bar(T("Festplatte"), fmt.bytes(c.disk) + " von " + fmt.bytes(c.diskMax), diskPct))),
+          bar("CPU", (cpu >= 0 ? fmt.num(cpu * 100) : "?") + " %" + T(" von ") + fmt.num(c.cpuLimit * 100, 0) + " %", cpuPct),
+          bar(T("Arbeitsspeicher"), fmt.bytes(c.memory) + T(" von ") + fmt.bytes(c.memoryMax), memPct),
+          bar(T("Festplatte"), c.disk < 0 ? T("wird gezählt") : fmt.bytes(c.disk) + (c.diskMax > 0 ? T(" von ") + fmt.bytes(c.diskMax) : T(" belegt")), diskPct))),
       h("section", { class: "panel" },
         h("header", null, h("h2", null, T("Zeitleiste")), h("a", { class: "btn small quiet", href: "/verlauf", "data-link": true }, T("Alles"))),
         timeline(S.overview.events.slice(-40).reverse(), "tl")));
@@ -1016,8 +1090,10 @@ function pageConsole(main, rest) {
     const frag = document.createDocumentFragment();
     rows.filter(([t]) => visible(t)).slice(-3000).forEach(([t, n]) => frag.append(row(t, n)));
     put(log, frag);
-    log.scrollTop = log.scrollHeight;
     stick = true;
+    newer.hidden = true;
+    log.scrollTop = log.scrollHeight;
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
   };
 
   const drawSeg = () => put(seg, ...[...servers, "alle"].map(n => h("button", {
@@ -1104,8 +1180,8 @@ function pageConsole(main, rest) {
     h("div", { class: "console-bar" }, seg, search, h("label", { class: "check" }, errBox, T("Nur Warnungen und Fehler")),
       h("span", { style: { flex: "1" } }),
       ...(which !== "alle" ? powerButtons(S.overview.servers.find(s => s.name === which) || {}, true) : [])),
-    h("div", { style: { position: "relative", minHeight: "0", display: "grid" } }, log, newer),
-    can("command") || can("players") ? h("div", { class: "prompt" }, suggest, h("label", null, ">"), input) : h("div", { class: "prompt dim" }, T("Nur lesen.")));
+    can("command") || can("players") ? h("div", { class: "prompt" }, h("label", null, ">"), input, suggest) : h("div", { class: "prompt dim" }, T("Nur lesen.")),
+    h("div", { style: { position: "relative", minHeight: "0", display: "grid" } }, log, newer));
   main.append(panel);
   fill();
   input.focus();
@@ -1113,26 +1189,154 @@ function pageConsole(main, rest) {
 
 // ---- players ------------------------------------------------------------------------------------
 
-function pagePlayers(main) {
-  const body = h("div");
-  main.append(header(T("Spieler"), T("Wer gerade auf welchem Server ist. Die Liste erneuert sich alle zehn Sekunden.")), body);
-  const draw = () => {
-    const rows = S.overview.servers.flatMap(s => s.players.map(p => ({ name: p, server: s.name })));
-    if (!rows.length) {
-      put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, T("Gerade ist niemand online."))));
-      return;
-    }
-    put(body, h("section", { class: "panel" }, h("table", null,
-      h("thead", null, h("tr", null, h("th", null, T("Spieler")), h("th", null, "Server"), h("th", { class: "right" }, ""))),
-      h("tbody", null, rows.map(r => h("tr", null,
-        h("td", null, h("span", { class: "player" }, h("img", { src: "https://mc-heads.net/avatar/" + encodeURIComponent(r.name) + "/48", alt: "" }), r.name)),
-        h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(r.server) } }, r.server)),
-        h("td", { class: "right" }, h("div", { class: "actions", style: { justifyContent: "flex-end" } },
-          can("players") ? h("button", { class: "btn small", onclick: () => message(r) }, T("Nachricht")) : null,
-          can("players") ? h("button", { class: "btn small danger", onclick: () => kick(r) }, T("Kicken")) : null))))))));
+function pagePlayers(main, rest) {
+  const tabs = [["alle", "Alle"], ["online", "Online"], ["whitelist", "Whitelist"], ["ops", "Operatoren"], ["gebannt", "Gebannt"]];
+  let tab = rest || "alle", q = "", data = null;
+  const body = h("div", { class: "stack" });
+  const search = h("input", { type: "search", placeholder: T("Spieler suchen"), "aria-label": T("Spieler suchen") });
+  const seg = h("div", { class: "seg", role: "group" });
+  main.append(header(T("Spieler"), T("Jeder, den der Server kennt: online, auf der Whitelist, Operatoren, Gebannte und wer in den letzten 30 Tagen da war."),
+    search, can("players") ? h("button", { class: "btn primary", onclick: () => addToWhitelist() }, T("Zur Whitelist hinzufügen")) : null), seg, body);
+  search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); draw(); });
+
+  const target = () => data?.server || S.overview.servers[0].name;
+  const cmd = (title, c) => run(title, async () => {
+    const a = await api("POST", "/servers/" + target() + "/command", { cmd: c });
+    if (/^ERR/.test(a || "")) throw new Error(a.replace(/^ERR\s*/, ""));
+    return a && a.length < 140 ? a.replace(/^OK\s*/, "") : "";
+  }).then(load, () => {});
+  const addToWhitelist = async () => {
+    const n = await confirmDialog({ title: T("Zur Whitelist hinzufügen"), ok: T("Hinzufügen"), input: { label: T("Minecraft-Name"), required: true } });
+    if (n) cmd(n + T(" ist auf der Whitelist"), "whitelist add " + n.trim());
   };
-  draw();
-  on("overview", draw);
+
+  const drawSeg = () => {
+    const roster = data?.roster && Array.isArray(data.roster.streamers);
+    const all = roster ? [...tabs.slice(0, 1), ["streamer", "Streamer und Plätze"], ...tabs.slice(1)] : tabs;
+    put(seg, all.map(([k, n]) => h("button", { type: "button", "aria-pressed": String(k === tab), onclick: () => { tab = k; history.replaceState(null, "", "/spieler/" + k); drawSeg(); draw(); } }, T(n),
+      data ? h("span", { class: "dim", style: { marginLeft: "0.4rem" } }, String(count(k))) : null)));
+  };
+  const filters = {
+    alle: () => true, online: p => p.online, whitelist: p => p.whitelisted, ops: p => p.op != null, gebannt: p => p.banned != null,
+  };
+  const count = k => k === "streamer" ? data.roster.streamers.length : data.players.filter(filters[k]).length;
+
+  const head = (n, size = 32) => h("img", { src: "https://mc-heads.net/avatar/" + encodeURIComponent(n) + "/" + size, alt: "", loading: "lazy" });
+  const pills = p => [
+    p.online ? h("span", { class: "pill c", style: { "--c": colorOf(p.online) } }, p.online) : null,
+    p.whitelisted ? h("span", { class: "pill" }, "Whitelist") : null,
+    p.op != null ? h("span", { class: "pill warn" }, "Op " + p.op) : null,
+    p.banned != null ? h("span", { class: "pill bad" }, T("Gebannt")) : null,
+  ];
+  const roleOf = p => {
+    const st = data?.roster?.streamers || [];
+    const own = st.find(s => s.name.toLowerCase() === p.name.toLowerCase());
+    const by = st.find(s => s.invited.some(i => i.name.toLowerCase() === p.name.toLowerCase()));
+    return own ? (own.granted ? T("eigener Platz, ") : "") + own.used + "/" + own.slots + T(" Plätze") : by ? T("eingeladen von ") + by.name : "";
+  };
+
+  const draw = () => {
+    if (!data) return;
+    if (tab === "streamer") return drawRoster();
+    const rows = data.players.filter(filters[tab] || filters.alle).filter(p => !q || p.name.toLowerCase().includes(q))
+      .sort((a, b) => (!!b.online - !!a.online) || (b.seen || 0) - (a.seen || 0) || a.name.localeCompare(b.name));
+    if (!rows.length) return put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, q ? T("Niemand passt zur Suche.") : T("Hier ist niemand."))));
+    put(body, h("section", { class: "panel" }, h("table", { class: "people" },
+      h("thead", null, h("tr", null, h("th", null, T("Spieler")), h("th", null, T("Status")), h("th", { class: "hide-s" }, data.roster ? T("Plätze") : ""), h("th", { class: "hide-s right" }, T("Zuletzt da")))),
+      h("tbody", null, rows.map(p => h("tr", { class: "click", tabindex: "0", onclick: () => drawer(p), onkeydown: e => { if (e.key === "Enter") drawer(p); } },
+        h("td", null, h("span", { class: "player" }, head(p.name), h("b", null, p.name))),
+        h("td", null, h("span", { class: "actions" }, pills(p))),
+        h("td", { class: "hide-s muted" }, roleOf(p)),
+        h("td", { class: "hide-s right dim" }, p.online ? T("jetzt") : p.seen ? fmt.date(p.seen) : "")))))));
+  };
+
+  const drawer = p => {
+    const st = data?.roster?.streamers || [];
+    const own = st.find(s => s.name.toLowerCase() === p.name.toLowerCase());
+    const by = st.find(s => s.invited.some(i => i.name.toLowerCase() === p.name.toLowerCase()));
+    const d = h("dialog", { class: "drawer" }, h("div", { class: "drawer-body" },
+      h("div", { class: "drawer-head" }, h("img", { class: "skin", src: "https://mc-heads.net/body/" + encodeURIComponent(p.name) + "/120", alt: "" }),
+        h("div", null, h("h2", null, p.name), h("div", { class: "actions" }, pills(p)),
+          h("p", { class: "muted" }, p.online ? T("Gerade auf ") + p.online : p.seen ? T("Zuletzt da ") + fmt.date(p.seen) : T("War noch nicht da")),
+          p.uuid ? h("p", { class: "dim mono" }, p.uuid) : null),
+        h("button", { class: "btn quiet small close", onclick: () => d.close(), "aria-label": T("Schließen") }, "×")),
+      p.banned != null ? h("p", { class: "muted" }, T("Grund: ") + p.banned) : null,
+      data.roster ? h("section", { class: "drawer-sec" }, h("h3", null, "Kronwerke"),
+        own ? h("p", null, (own.granted ? T("Eigener Platz. ") : T("Streamer. ")) + own.used + T(" von ") + own.slots + T(" Plätzen vergeben."))
+          : by ? h("p", null, T("Eingeladen von ") + by.name + ".") : h("p", { class: "muted" }, T("Kein Platz in Kronwerke.")),
+        h("div", { class: "actions" },
+          !own && !by && can("command") ? h("button", { class: "btn small", onclick: async () => {
+            const n = await confirmDialog({ title: p.name + T(" als Streamer anlegen?"), text: T("Bekommt einen eigenen Platz und so viele Plätze für Zuschauer. Leer heißt Standard."), ok: T("Anlegen"), input: { label: T("Plätze"), value: "" } });
+            if (n != null) { d.close(); cmd(p.name + T(" angelegt"), "kw admin grant " + p.name + (n.trim() ? " " + parseInt(n, 10) : "")); }
+          } }, T("Als Streamer anlegen")) : null,
+          own && can("command") ? h("button", { class: "btn small", onclick: () => { d.close(); tab = "streamer"; drawSeg(); draw(); } }, T("Plätze verwalten")) : null,
+          by && can("command") ? h("button", { class: "btn small danger", onclick: () => { d.close(); cmd(T("Platz frei"), "kw admin revoke " + by.name + " " + p.name); } }, T("Platz bei ") + by.name + T(" freigeben")) : null)) : null,
+      h("section", { class: "drawer-sec" }, h("h3", null, T("Aktionen")), h("div", { class: "actions" },
+        p.online && can("players") ? h("button", { class: "btn small", onclick: () => { d.close(); message({ name: p.name, server: p.online }); } }, T("Nachricht")) : null,
+        p.online && can("players") ? h("button", { class: "btn small danger", onclick: () => { d.close(); kick({ name: p.name, server: p.online }).then(load); } }, T("Kicken")) : null,
+        can("players") ? h("button", { class: "btn small", onclick: () => { d.close(); cmd(p.whitelisted ? T("Von der Whitelist") : T("Auf der Whitelist"), "whitelist " + (p.whitelisted ? "remove " : "add ") + p.name); } }, p.whitelisted ? T("Von der Whitelist nehmen") : T("Zur Whitelist")) : null,
+        can("command") ? h("button", { class: "btn small", onclick: () => { d.close(); cmd(p.op != null ? "Deop" : "Op", (p.op != null ? "deop " : "op ") + p.name); } }, p.op != null ? T("Op entziehen") : T("Op geben")) : null,
+        can("players") ? h("button", { class: "btn small " + (p.banned != null ? "" : "danger"), onclick: async () => {
+          if (p.banned != null) { d.close(); return cmd(T("Entbannt"), "pardon " + p.name); }
+          const why = await confirmDialog({ title: p.name + T(" bannen?"), ok: T("Bannen"), danger: true, input: { label: T("Grund"), value: "" } });
+          if (why != null) { d.close(); cmd(p.name + T(" gebannt"), "ban " + p.name + (why ? " " + why : "")); }
+        } }, p.banned != null ? T("Entbannen") : T("Bannen")) : null))));
+    d.addEventListener("close", () => d.remove());
+    d.addEventListener("click", e => { if (e.target === d) d.close(); });
+    document.body.append(d);
+    d.showModal();
+  };
+
+  const drawRoster = () => {
+    const r = data.roster;
+    const list = r.streamers.filter(s => !q || s.name.toLowerCase().includes(q) || s.invited.some(i => i.name.toLowerCase().includes(q)))
+      .sort((a, b) => a.granted - b.granted || a.name.localeCompare(b.name));
+    const add = can("command") ? h("button", { class: "btn primary", onclick: async () => {
+      const n = await confirmDialog({ title: T("Streamer anlegen"), text: T("Der Minecraft-Name. Plätze danach auf der Karte."), ok: T("Anlegen"), input: { label: T("Minecraft-Name"), required: true } });
+      if (n) cmd(n + T(" angelegt"), "kw admin grant " + n.trim());
+    } }, T("Streamer anlegen")) : null;
+    put(body,
+      h("div", { class: "actions" }, h("span", { class: "muted" }, T("Standard: ") + r.defaultSlots + T(" Plätze pro Streamer.")), h("span", { style: { flex: "1" } }), add),
+      list.length ? h("div", { class: "roster" }, list.map(s => {
+        const pct = s.slots > 0 ? s.used / s.slots : 0;
+        const stepper = (label, value, onSet) => h("span", { class: "stepper" }, h("span", { class: "muted" }, label),
+          can("command") ? h("button", { class: "btn small quiet", "aria-label": label + " -", onclick: () => onSet(value - 1) }, "-") : null,
+          h("b", null, String(value)),
+          can("command") ? h("button", { class: "btn small quiet", "aria-label": label + " +", onclick: () => onSet(value + 1) }, "+") : null);
+        const base = s.override >= 0 ? s.override : r.defaultSlots;
+        return h("section", { class: "panel streamer" },
+          h("header", null, h("span", { class: "player" }, head(s.name), h("span", null, h("b", null, s.name), h("div", { class: "dim" }, s.granted ? T("eigener Platz") : T("Streamer")))),
+            h("b", { class: "num", style: { fontSize: "1.25rem" } }, s.used + "/" + s.slots)),
+          h("div", { class: "body stack" },
+            h("div", { class: "meter" }, h("span", { style: { width: Math.min(100, pct * 100) + "%" }, "data-health": pct >= 1 ? "warn" : "" })),
+            h("div", { class: "chips" }, s.invited.map(i => h("span", { class: "chip" }, head(i.name, 16), i.name,
+              can("command") ? h("button", { "aria-label": i.name + T(" entfernen"), onclick: async () => {
+                if (await confirmDialog({ title: i.name + T(" entfernen?"), text: T("Der Platz bei ") + s.name + T(" wird frei, der Spieler fliegt von der Whitelist."), ok: T("Entfernen"), danger: true })) cmd(T("Platz frei"), "kw admin revoke " + s.name + " " + i.name);
+              } }, "×") : null)),
+              can("command") && s.used < s.slots ? h("button", { class: "chip add", onclick: async () => {
+                const n = await confirmDialog({ title: T("Spieler für ") + s.name, ok: T("Einladen"), input: { label: T("Minecraft-Name"), required: true } });
+                if (n) cmd(n.trim() + T(" eingeladen"), "kw admin invite " + s.name + " " + n.trim());
+              } }, "+ " + T("Spieler einladen")) : null),
+            h("div", { class: "actions" },
+              stepper(T("Plätze"), base, v => v >= 0 && cmd(s.name + ": " + v + T(" Plätze"), "kw admin slots " + s.name + " " + v)),
+              stepper("Bonus", s.bonus, v => cmd(s.name + ": Bonus " + v, "kw admin bonus " + s.name + " " + (v - s.bonus))),
+              h("span", { style: { flex: "1" } }),
+              s.granted && can("command") ? h("button", { class: "btn small danger quiet", onclick: async () => {
+                if (await confirmDialog({ title: s.name + T(" entfernen?"), text: T("Der eigene Platz und alle Plätze, die ") + s.name + T(" vergeben hat, fallen weg."), ok: T("Entfernen"), danger: true })) cmd(s.name + T(" entfernt"), "kw admin ungrant " + s.name);
+              } }, T("Entfernen")) : null)));
+      })) : h("section", { class: "panel" }, h("p", { class: "empty" }, T("Noch keine Streamer."))));
+  };
+
+  const load = async () => {
+    try { data = await api("GET", "/people"); } catch (e) { put(body, h("p", { class: "empty" }, e.message)); return; }
+    if (tab === "streamer" && !data.roster) tab = "alle";
+    drawSeg();
+    draw();
+  };
+  put(body, h("p", { class: "dim" }, T("Lade...")));
+  load();
+  let last = 0;
+  on("overview", () => { if (Date.now() - last > 20000 && !$("dialog[open]")) { last = Date.now(); load(); } });
 }
 
 async function message(r) {
@@ -1142,6 +1346,7 @@ async function message(r) {
 }
 
 async function kick(r) {
+  if (!r) return;
   const reason = await confirmDialog({ title: r.name + T(" kicken?"), text: T("Der Grund steht auf seinem Bildschirm."), ok: T("Kicken"), danger: true, input: { label: T("Grund"), value: T("Kurze Wartung, gleich wieder da.") } });
   if (reason == null) return;
   await run(r.name + T(" gekickt"), () => api("POST", "/servers/" + r.server + "/command", { cmd: "kick " + r.name + " " + reason }));
@@ -1344,7 +1549,7 @@ function pageResources(main) {
     const sumHeap = o.servers.reduce((n, s) => n + (parseInt(s.memory, 10) || 0) * (/M$/i.test(s.memory) ? 1 / 1024 : 1), 0);
     put(body, 
       h("section", { class: "panel" },
-        h("header", null, h("h2", null, "CPU"), h("p", null, fmt.num(c.cpuLimit, 1) + T(" Kerne erlaubt, ") + c.cpus + " sichtbar")),
+        h("header", null, h("h2", null, "CPU"), h("p", null, fmt.num(c.cpuLimit, 1) + T(" Kerne erlaubt, ") + c.cpus + T(" sichtbar"))),
         h("div", { class: "body stack" },
           h("div", { class: "cpus", "aria-label": T("Welcher Server welche CPU nutzt") }, cells),
           can("config") ? h("div", { class: "actions" },

@@ -136,6 +136,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--star); }
 textarea { height: auto; padding: 0.6rem 0.7rem; }
 label.field { display: grid; gap: 0.3rem; color: var(--mute); font-size: 0.8125rem; }
 label.field > span { color: var(--mute); }
+input[type="checkbox"]:not(.switch) { accent-color: var(--gold); width: 1rem; height: 1rem; margin: 0; }
 .check { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
 .switch { appearance: none; width: 2.1rem; height: 1.2rem; border-radius: 999px; background: var(--hover); border: 1px solid var(--line-2); position: relative; cursor: pointer; transition: background 0.15s; margin: 0; }
 .switch::after { content: ""; position: absolute; top: 0.12rem; left: 0.15rem; width: 0.85rem; height: 0.85rem; border-radius: 50%; background: var(--mute); transition: transform 0.18s var(--ease), background 0.15s; }
@@ -210,7 +211,8 @@ label.field > span { color: var(--mute); }
 .timeline li[data-bad] .what { color: var(--bad); }
 
 /* ---- console ---------------------------------------------------------------------------- */
-.console { display: grid; grid-template-rows: auto 1fr auto; height: calc(100vh - 8.3rem); min-height: 22rem; }
+.console { display: grid; grid-template-rows: auto auto 1fr; height: calc(100vh - 2.8rem); min-height: 22rem; }
+main:has(.console) { padding-bottom: 1.4rem; }
 .console-bar { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); }
 .console-bar input[type="search"] { width: 14rem; }
 .log {
@@ -227,10 +229,10 @@ label.field > span { color: var(--mute); }
 .log .cmd::before { content: "> "; color: var(--dim); }
 .log .answer { color: var(--teal); white-space: pre-wrap; }
 .newer { position: absolute; left: 50%; transform: translateX(-50%); bottom: 0.75rem; z-index: 2; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-.prompt { display: flex; gap: 0.5rem; align-items: center; padding: 0.6rem 0.75rem; border-top: 1px solid var(--line); position: relative; }
+.prompt { display: flex; gap: 0.5rem; align-items: center; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--line); position: relative; z-index: 3; }
 .prompt label { color: var(--dim); font: 500 0.8rem var(--mono); }
 .prompt input { flex: 1; font-family: var(--mono); font-size: 0.8125rem; }
-.suggest { position: absolute; bottom: 100%; left: 0.75rem; right: 0.75rem; margin-bottom: 4px; list-style: none; padding: 0.25rem; background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-s); font: 0.8rem var(--mono); max-height: 14rem; overflow: auto; }
+.suggest { position: absolute; top: 100%; left: 0.75rem; right: 0.75rem; margin-top: 4px; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5); list-style: none; padding: 0.25rem; background: var(--raised); border: 1px solid var(--line-2); border-radius: var(--r-s); font: 0.8rem var(--mono); max-height: 14rem; overflow: auto; }
 .suggest li { padding: 0.3rem 0.5rem; border-radius: 4px; cursor: pointer; }
 .suggest li[aria-selected="true"] { background: var(--hover); }
 
@@ -248,6 +250,35 @@ td.right, th.right { text-align: right; }
 .pill.ok { border-color: rgba(143, 209, 139, 0.5); color: var(--ok); }
 .pill.warn { border-color: rgba(240, 163, 94, 0.5); color: var(--warn); }
 .pill.bad { border-color: rgba(240, 101, 121, 0.5); color: var(--bad); }
+
+/* ---- people ------------------------------------------------------------------------- */
+tr.click { cursor: pointer; }
+tr.click:focus-visible { outline-offset: -2px; }
+.mono { font-family: var(--mono); font-size: 0.75rem; }
+.drawer .actions { justify-content: flex-start; }
+.head + .seg { margin-bottom: 1rem; }
+dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min(30rem, 100vw); border-radius: 0; border-width: 0 0 0 1px; animation: slide 0.22s var(--ease); }
+@keyframes slide { from { transform: translateX(30px); opacity: 0; } }
+.drawer-body { display: grid; gap: 1.25rem; padding: 1.4rem; }
+.drawer-head { display: grid; grid-template-columns: auto 1fr auto; gap: 1.1rem; align-items: start; }
+.drawer-head h2 { margin: 0 0 0.4rem; font-size: 1.4rem; }
+.drawer-head p { margin: 0.45rem 0 0; }
+.drawer-head .skin { width: 60px; image-rendering: pixelated; }
+.drawer-head .close { font-size: 1.3rem; }
+.drawer-sec { display: grid; gap: 0.6rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.drawer-sec h3 { margin: 0; font-size: 0.8125rem; color: var(--mute); font-weight: 600; }
+.drawer-sec p { margin: 0; }
+.roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr)); gap: 1rem; }
+.streamer header .player img { width: 2rem; height: 2rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.3rem 0.2rem 0.3rem; border-radius: 999px; background: var(--raised); border: 1px solid var(--line); font-size: 0.8125rem; }
+.chip img { width: 1rem; height: 1rem; border-radius: 3px; image-rendering: pixelated; }
+.chip button { border: 0; background: transparent; color: var(--dim); cursor: pointer; padding: 0 0.3rem; font-size: 1rem; line-height: 1; }
+.chip button:hover { color: var(--bad); }
+.chip.add { cursor: pointer; color: var(--mute); border-style: dashed; padding: 0.2rem 0.7rem; background: transparent; }
+.chip.add:hover { color: var(--star); border-color: var(--line-2); }
+.stepper { display: inline-flex; align-items: center; gap: 0.35rem; }
+.stepper b { min-width: 1.5rem; text-align: center; }
 
 /* ---- files ----------------------------------------------------------------------------- */
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; font-size: 0.875rem; }
@@ -322,7 +353,7 @@ dialog .actions { justify-content: flex-end; }
   nav.pages kbd { display: none; }
   main { padding: 1rem 1rem 3rem; }
   .mspt b { font-size: 2rem; }
-  .console { height: calc(100vh - 9rem); }
+  .console { height: calc(100vh - 8rem); }
   .console-bar input[type="search"] { width: 100%; }
   .share { grid-template-columns: 5rem 1fr 2.5rem; }
   th, td { padding: 0.5rem 0.6rem; }

@@ -421,6 +421,8 @@ public final class Fleet {
 
     public long memoryLimitGb() {
         if (!cfg.get("container.memory").isEmpty()) return cfg.number("container.memory", 0);
+        String panel = System.getenv("SERVER_MEMORY");
+        if (panel != null && panel.matches("[1-9][0-9]*")) return Long.parseLong(panel) / 1024;
         long max = Proc.containerMemory()[1];
         return max <= 0 ? 0 : max >> 30;
     }
@@ -554,8 +556,21 @@ public final class Fleet {
     private long containerCpuLast = -1, containerAt;
 
     /** Every ten seconds: CPU, memory, tick time and players of every server. */
+    private volatile long diskUsed = -1;
+
+    /** Bytes the container's folder uses, counted every five minutes; -1 before the first count. */
+    public long diskUsed() {
+        return diskUsed;
+    }
+
+    /** The disk quota: container.disk in GB, or -1 when unknown (panels do not tell). */
+    public long diskLimit() {
+        long gb = cfg.number("container.disk", 0);
+        return gb > 0 ? gb << 30 : -1;
+    }
+
     private void monitor() {
-        long balancedAt = 0;
+        long balancedAt = 0, countedAt = 0;
         while (true) {
             try {
                 Thread.sleep(10_000);
@@ -564,6 +579,10 @@ public final class Fleet {
             }
             long now = System.currentTimeMillis();
             for (Server s : servers()) work.submit(() -> sample(s, now));
+            if (now - countedAt > 300_000) {
+                countedAt = now;
+                work.submit(() -> diskUsed = Proc.folderSize(root));
+            }
             long c = Proc.containerCpuMillis();
             long[] mem = Proc.containerMemory();
             double pct = -1;

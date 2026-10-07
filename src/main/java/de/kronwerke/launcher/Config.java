@@ -83,8 +83,13 @@ public final class Config {
             # Move CPU shares between servers by how busy they are (needs cpu.pin).
             cpu.balance=false
 
-            # Memory the servers may use together, in GB. Empty reads the container's limit.
+            # Memory the servers may use together, in GB. Empty reads the panel's SERVER_MEMORY or
+            # the container's limit.
             container.memory=
+
+            # The disk quota in GB, for the console's bar (panels do not tell it). Empty shows only
+            # what is used.
+            container.disk=
             """;
 
     static final String SERVER_TEMPLATE = """

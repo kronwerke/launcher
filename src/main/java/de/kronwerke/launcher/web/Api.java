@@ -40,7 +40,8 @@ import java.util.stream.Stream;
  */
 final class Api {
     /** Commands someone with only "players" may run. */
-    static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ");
+    static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
+            "ban ", "pardon ");
     static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args");
 
     private final Web web;
@@ -149,6 +150,11 @@ final class Api {
             case "players" -> {
                 need(r, "read");
                 r.ok(players());
+                return;
+            }
+            case "people" -> {
+                need(r, "read");
+                r.ok(people());
                 return;
             }
             case "season" -> {
@@ -303,7 +309,7 @@ final class Api {
     private Map<String, Object> overview() throws IOException {
         Pack.Info info = fleet.pack().local();
         long[] mem = Proc.containerMemory();
-        long[] disk = Proc.disk(fleet.root());
+        long[] disk = {fleet.diskUsed(), fleet.diskLimit()};
         Metrics.Sample c = fleet.container().last();
         List<Object> servers = new ArrayList<>();
         for (Server s : fleet.servers()) servers.add(server(s));
@@ -348,6 +354,59 @@ final class Api {
             for (String n : s.metrics().players()) out.add(Json.map("name", n, "server", s.name()));
         }
         return out;
+    }
+
+    /**
+     * Everyone the first Minecraft server knows: online, whitelisted, operators, banned, and
+     * whoever logged in (usercache.json keeps a month). With Kronwerke Core also its roster of
+     * streamers and slots.
+     */
+    private Map<String, Object> people() {
+        Server main = fleet.servers().stream().filter(Server::minecraft).findFirst().orElse(fleet.main());
+        Map<String, Map<String, Object>> byName = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        java.util.function.Function<String, Map<String, Object>> get = n -> byName.computeIfAbsent(n, k -> Json.map("name", k));
+        for (Object o : jsonList(main.dir().resolve("usercache.json"))) {
+            if (!(o instanceof Map<?, ?> m)) continue;
+            Map<String, Object> p = get.apply(String.valueOf(m.get("name")));
+            p.put("uuid", m.get("uuid"));
+            p.put("seen", lastSeen(String.valueOf(m.get("expiresOn"))));
+        }
+        for (Object o : jsonList(main.dir().resolve("whitelist.json"))) {
+            if (o instanceof Map<?, ?> m) get.apply(String.valueOf(m.get("name"))).put("whitelisted", true);
+        }
+        for (Object o : jsonList(main.dir().resolve("ops.json"))) {
+            if (o instanceof Map<?, ?> m) get.apply(String.valueOf(m.get("name"))).put("op", m.get("level"));
+        }
+        for (Object o : jsonList(main.dir().resolve("banned-players.json"))) {
+            if (o instanceof Map<?, ?> m) get.apply(String.valueOf(m.get("name"))).put("banned", String.valueOf(m.get("reason")));
+        }
+        for (Server s : fleet.servers()) {
+            for (String n : s.metrics().players()) get.apply(n).put("online", s.name());
+        }
+        Map<String, Object> out = Json.map("server", main.name(), "players", new ArrayList<>(byName.values()),
+                "whitelist", Proc.whitelistOn(main.properties()));
+        if (web.season() && main.state() == Server.State.RUNNING) out.put("roster", core(main, "kw admin roster json"));
+        return out;
+    }
+
+    private static List<Object> jsonList(Path file) {
+        try {
+            if (!Files.exists(file)) return List.of();
+            Object v = Json.parse(Files.readString(file));
+            return v instanceof List<?> l ? new ArrayList<>(l) : List.of();
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    /** usercache.json keeps an entry a month after the last login. */
+    static long lastSeen(String expiresOn) {
+        try {
+            var f = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss Z");
+            return java.time.OffsetDateTime.parse(expiresOn, f).minusMonths(1).toInstant().toEpochMilli();
+        } catch (RuntimeException e) {
+            return 0;
+        }
     }
 
     /** Core's own answers about the season and its goals, read on the first server. */
