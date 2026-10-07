@@ -51,6 +51,17 @@ public final class Main {
             t.start();
         }
 
+        de.kronwerke.launcher.web.Web web = null;
+        if (!cfg.get("console.port").isEmpty()) {
+            try {
+                web = new de.kronwerke.launcher.web.Web(fleet, cfg);
+                web.start();
+            } catch (Exception e) {
+                fleet.note("Console could not start: " + e.getMessage());
+                web = null;
+            }
+        }
+
         AtomicBoolean ending = new AtomicBoolean();
         Thread console = new Thread(() -> readConsole(fleet, ending), "console-reader");
         console.setDaemon(true);
@@ -62,6 +73,7 @@ public final class Main {
         String result = fleet.run();
         ending.set(true);
         if (link != null) link.close();
+        if (web != null) web.stop();
         console.join(2000);
         fleet.awaitWork();
         if (!"reload".equals(result)) fleet.note("Launcher stopped");

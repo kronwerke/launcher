@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * servers keep running.
  */
 public final class Updater {
-    static final String PREFIX = "https://github.com/kronwerke/launcher/releases/download/";
+    public static final String PREFIX = "https://github.com/kronwerke/launcher/releases/download/";
     static final int KEEP = 3;
 
     private Updater() {

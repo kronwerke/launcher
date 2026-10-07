@@ -34,7 +34,6 @@ public final class Link {
     private final Fleet fleet;
     private final Server server;
     private volatile boolean closed;
-    private final ServerFiles files;
     private final String key;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
             .followRedirects(HttpClient.Redirect.NORMAL).build();
@@ -58,7 +57,6 @@ public final class Link {
         this.fleet = fleet;
         this.server = fleet.main();
         Path keyFile = root.resolve("kronwerke/link.key");
-        this.files = new ServerFiles(root, keyFile);
         this.key = loadKey(keyFile);
         fleet.onState(this::sendState);
         server.onConsole(line -> {
@@ -267,7 +265,7 @@ public final class Link {
      */
     Object op(String op, Map<String, Object> a) throws Exception {
         Server s = fleet.server(Json.str(a, "server", ""));
-        ServerFiles files = s == server ? this.files : new ServerFiles(s.dir(), root.resolve("kronwerke/link.key"));
+        ServerFiles files = fleet.files(s);
         switch (op) {
             case "status": {
                 Map<String, Object> st = status(s);

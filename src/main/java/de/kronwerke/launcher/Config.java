@@ -41,6 +41,22 @@ public final class Config {
             # console off. host is the name it is reached by (passkeys are bound to it).
             console.port=
             console.host=console.kronwerke.com
+            console.bind=0.0.0.0
+
+            # Who may connect: "cloudflare" accepts only Cloudflare's origin pull certificate,
+            # a path names another CA file, "off" accepts anyone (only for a test on loopback).
+            console.client.ca=cloudflare
+
+            # TLS certificate as PEM files, like a Cloudflare origin certificate. Empty makes a
+            # self signed one in kronwerke/console. console.tls=off only works on loopback.
+            console.cert=
+            console.key=
+            console.tls=
+
+            # More origins passkeys may come from, comma separated, and the passkey domain if it
+            # is not the host. For tests only.
+            console.origins=
+            console.rpid=
 
             # The bus Kronwerke Core connects to (chat, tablist, moves between servers). Loopback only.
             bus.port=25580

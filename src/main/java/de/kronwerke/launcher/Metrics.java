@@ -24,6 +24,25 @@ public final class Metrics {
     private List<String> players = List.of();
     private long lastCpu = -1, lastAt;
 
+    /** The samples as plain strings, to hand to the next launcher on a reload. */
+    synchronized List<String> save() {
+        List<String> out = new ArrayList<>();
+        for (Sample s : samples) out.add(s.time() + " " + s.cpu() + " " + s.rss() + " " + s.tps() + " " + s.mspt() + " " + s.players());
+        return out;
+    }
+
+    synchronized void restore(List<?> saved) {
+        for (Object o : saved) {
+            try {
+                String[] f = String.valueOf(o).split(" ");
+                add(new Sample(Long.parseLong(f[0]), Double.parseDouble(f[1]), Long.parseLong(f[2]), Double.parseDouble(f[3]),
+                        Double.parseDouble(f[4]), Integer.parseInt(f[5])));
+            } catch (RuntimeException ignored) {
+                // an older format
+            }
+        }
+    }
+
     synchronized void reset() {
         lastCpu = -1;
         players = List.of();
@@ -73,7 +92,7 @@ public final class Metrics {
         return count == 0 ? -1 : sum / count;
     }
 
-    static double round(double v) {
+    public static double round(double v) {
         return v < 0 ? -1 : Math.round(v * 10) / 10.0;
     }
 

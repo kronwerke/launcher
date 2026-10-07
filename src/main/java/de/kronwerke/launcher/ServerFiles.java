@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 
 /**
  * File access for the link. Everything stays inside the server folder. Reading is allowed
- * anywhere there except the link key; writing only where a pack or config change belongs.
+ * anywhere there except keys and the console's data; writing only where a pack or config change belongs.
  */
 public final class ServerFiles {
     static final long MAX_READ = 8L << 20;
@@ -24,11 +24,17 @@ public final class ServerFiles {
     static final Set<String> WRITE_FILES = Set.of("server.properties", "ops.json", "whitelist.json", "banned-players.json", "banned-ips.json", "user_jvm_args.txt");
 
     private final Path root;
-    private final Path key;
+    private final List<Path> hidden = new ArrayList<>();
 
-    public ServerFiles(Path root, Path key) {
+    /** hidden are files or folders that can be neither listed, read nor written: keys and the console's data. */
+    public ServerFiles(Path root, Path... hidden) {
         this.root = root.toAbsolutePath().normalize();
-        this.key = key.toAbsolutePath().normalize();
+        for (Path h : hidden) this.hidden.add(h.toAbsolutePath().normalize());
+    }
+
+    private boolean isHidden(Path p) {
+        for (Path h : hidden) if (p.startsWith(h)) return true;
+        return false;
     }
 
     Path resolve(String rel) throws IOException {
@@ -36,7 +42,7 @@ public final class ServerFiles {
         if (rel.startsWith("/") || rel.contains("\\") || rel.contains("\0")) throw new IOException("bad path");
         Path p = root.resolve(rel).normalize();
         if (!p.startsWith(root)) throw new IOException("outside the server folder");
-        if (p.equals(key)) throw new IOException("the link key is not readable over the link");
+        if (isHidden(p)) throw new IOException("keys are not readable from outside");
         return p;
     }
 
@@ -49,13 +55,22 @@ public final class ServerFiles {
         return false;
     }
 
+    /** Whether a path may be written, for the console to show. */
+    public boolean writableRel(String rel) {
+        try {
+            return writable(resolve(rel));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     public List<Map<String, Object>> list(String rel) throws IOException {
         Path dir = resolve(rel);
         if (!Files.isDirectory(dir)) throw new IOException("not a folder: " + rel);
         List<Map<String, Object>> out = new ArrayList<>();
         try (Stream<Path> s = Files.list(dir)) {
             for (Path p : s.sorted(Comparator.comparing(Path::toString)).toList()) {
-                if (p.equals(key)) continue;
+                if (isHidden(p.toAbsolutePath().normalize())) continue;
                 boolean d = Files.isDirectory(p);
                 out.add(Json.map("name", p.getFileName().toString(), "dir", d,
                         "size", d ? 0L : Files.size(p), "modified", Files.getLastModifiedTime(p).toMillis()));

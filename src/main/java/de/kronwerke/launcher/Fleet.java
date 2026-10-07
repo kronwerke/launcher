@@ -110,6 +110,12 @@ public final class Fleet {
         }
     }
 
+    /** File access inside a server's folder, with every key and the console's data hidden. */
+    public ServerFiles files(Server s) {
+        Path k = root.resolve("kronwerke");
+        return new ServerFiles(s.dir(), k.resolve("link.key"), k.resolve("bus.key"), k.resolve("console"));
+    }
+
     public Server main() {
         return server(null);
     }
@@ -133,6 +139,12 @@ public final class Fleet {
     public void onEvent(Consumer<Map<String, Object>> c) {
         synchronized (eventListeners) {
             eventListeners.add(c);
+        }
+    }
+
+    public void removeEvent(Consumer<Map<String, Object>> c) {
+        synchronized (eventListeners) {
+            eventListeners.remove(c);
         }
     }
 
@@ -382,7 +394,7 @@ public final class Fleet {
         }
     }
 
-    long memoryLimitGb() {
+    public long memoryLimitGb() {
         if (!cfg.get("container.memory").isEmpty()) return cfg.number("container.memory", 0);
         long max = Proc.containerMemory()[1];
         return max <= 0 ? 0 : max >> 30;
@@ -473,6 +485,16 @@ public final class Fleet {
             at += count;
         }
         return out;
+    }
+
+    /** Applies pinning or its end at once, after cpu.pin changed. */
+    public void applyCpuNow() {
+        applyCpu(null);
+        if (!cfg.flag("cpu.pin")) {
+            // unpinned: every server may use every CPU again
+            List<Integer> all = Proc.allowedCpus();
+            for (Server s : servers()) if (s.pid() > 0 && !all.isEmpty()) Proc.pin(s.pid(), all);
+        }
     }
 
     /** Changes a server's CPU share, in its file and at once. */
@@ -572,7 +594,7 @@ public final class Fleet {
     }
 
     /** Runs a task off the caller's thread. */
-    void submit(Runnable r) {
+    public void submit(Runnable r) {
         work.submit(r);
     }
 

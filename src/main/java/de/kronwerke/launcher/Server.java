@@ -47,7 +47,7 @@ public final class Server {
     private int starts;
 
     private final Deque<String> console = new ArrayDeque<>();
-    static final int CONSOLE_LINES = 5000;
+    public static final int CONSOLE_LINES = 5000;
     private final List<Consumer<String>> consoleListeners = new ArrayList<>();
     private final List<Runnable> stateListeners = new ArrayList<>();
     private final Metrics metrics = new Metrics();
@@ -171,6 +171,11 @@ public final class Server {
         print("[Kronwerke] " + msg);
     }
 
+    /** A launcher note in this server's console, for parts outside this package. */
+    public void notice(String msg) {
+        note(msg);
+    }
+
     void set(State s, String why) {
         synchronized (lock) {
             state = s;
@@ -258,6 +263,7 @@ public final class Server {
         synchronized (console) {
             shared.put("console:" + name, new ArrayList<>(console));
         }
+        shared.put("metrics:" + name, metrics.save());
         synchronized (lock) {
             shared.put("server:" + name, Json.write(Json.map("state", state.name(), "detail", detail, "since", since.toString(),
                     "starts", starts, "want", wantRunning)));
@@ -321,6 +327,7 @@ public final class Server {
     void begin() {
         Object adopted = Boot.shared().get("pump:" + name);
         Object saved = Boot.shared().get("server:" + name);
+        if (Boot.shared().remove("metrics:" + name) instanceof List<?> old) metrics.restore(old);
         if (Boot.shared().remove("console:" + name) instanceof List<?> lines) {
             synchronized (console) {
                 for (Object l : lines) console.addLast(String.valueOf(l));

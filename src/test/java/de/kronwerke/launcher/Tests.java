@@ -26,6 +26,7 @@ public final class Tests {
         answersFromMinecraft();
         propertiesKeepTheRest();
         bootPicksTheCurrentJar();
+        passed += de.kronwerke.launcher.web.AccessTests.run();
         System.out.println(passed + " checks passed");
     }
 
