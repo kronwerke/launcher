@@ -556,7 +556,62 @@ const EN = {
   " ist abgestürzt": " crashed",
   "Spieler öffnen": "Open player",
   "letzte ": "last ",
-  " Spieler (1)": " player"
+  " Spieler (1)": " player",
+  "erledigt": "done",
+  "Starte ": "Start ",
+  "alle Server": "all servers",
+  "Stoppe ": "Stop ",
+  "Starte neu: ": "Restart: ",
+  "Beende hart: ": "Kill: ",
+  "Sage: ": "Say: ",
+  "Kicke ": "Kick ",
+  "Banne ": "Ban ",
+  "Entbanne ": "Unban ",
+  "Whitelist: ": "Whitelist: ",
+  "Von der Whitelist: ": "Off the whitelist: ",
+  "Streamer anlegen: ": "Add streamer: ",
+  "Streamer entfernen: ": "Remove streamer: ",
+  " auf einen Platz von ": " onto a slot of ",
+  "Platz frei: ": "Free slot: ",
+  " bei ": " of ",
+  "Pack aktualisieren (alle Server starten neu)": "Update pack (every server restarts)",
+  "Warte ": "Wait ",
+  "gewartet": "waited",
+  "Gehe zu ": "Go to ",
+  "Keine Seite ": "No page ",
+  "da": "there",
+  "Öffne ": "Open ",
+  "Assistent offen": "wizard open",
+  "Keine Befehle erlaubt": "No commands allowed",
+  "Kein Server ": "No server ",
+  "Es fehlt: Text": "Missing: text",
+  "Es fehlt: ": "Missing: ",
+  " ist keine Zahl": " is not a number",
+  " ist kein Minecraft-Name": " is not a Minecraft name",
+  "Suchen, oder einen Befehl: restart mining && say Hallo": "Search, or a command: restart mining && say Hello",
+  "Suchen oder Befehl": "Search or command",
+  "Tab ergänzt, Enter führt aus, && verkettet, ; macht trotz Fehler weiter. help zeigt alle Befehle.": "Tab completes, Enter runs, && chains, ; carries on after errors. help lists every command.",
+  "unvollständig": "incomplete",
+  "Enter führt aus": "Enter runs",
+  "Ausführen: ": "Run: ",
+  "Fehler": "Error",
+  "Zahl": "Number",
+  "Code vom angemeldeten Gerät": "Code from the signed in device",
+  "Passkey für dieses Gerät anlegen": "Create a passkey for this device",
+  "Zurück zur Anmeldung": "Back to sign in",
+  "Gerät koppeln": "Pair a device",
+  "Auf einem Gerät, auf dem du angemeldet bist: Zugang, dann Gerät koppeln. Den Code hier eingeben, dann bekommt dieses Gerät einen eigenen Passkey.": "On a device where you are signed in: Access, then Pair a device. Enter the code here and this device gets a passkey of its own.",
+  "Kein Passkey auf diesem Gerät? Wähl im Fenster das Handy (QR-Code), oder ": "No passkey on this device? Pick your phone in the window (QR code), or ",
+  "koppel es mit einem Code": "pair it with a code",
+  "ohne Platz": "no place",
+  "Über Discord verlinkt": "Linked on Discord",
+  "neu": "new",
+  "hat Plätze": "has slots",
+  "Plätze geben": "Give slots",
+  "Kein Code": "No code",
+  "Auf dem anderen Gerät ": "On the other device open ",
+  " öffnen, unten auf koppel es mit einem Code tippen und diesen Code eingeben:": ", tap pair it with a code at the bottom and enter this code:",
+  "Gilt einmal, noch ": "Works once, for another "
   };
 function T(s) {
   if (s == null) return s;
@@ -752,6 +807,23 @@ function door(kind, message) {
       h("label", { class: "field" }, h("span", null, T("Dein Name")), name),
       h("button", { class: "btn primary", type: "submit" }, T("Passkey anlegen und beitreten")), err);
     card = [h("h1", null, T("Einladung")), h("p", null, T("Du wurdest eingeladen. Ein Passkey ersetzt das Passwort: dein Gerät bestätigt mit Fingerabdruck, Gesicht oder PIN.")), form];
+  } else if (kind === "pair") {
+    const code = h("input", { type: "text", autocomplete: "one-time-code", placeholder: "XXXX-XXXX", required: true, spellcheck: "false", style: { fontSize: "1.4rem", letterSpacing: "0.08em", textAlign: "center" } });
+    const form = h("form", { onsubmit: async e => {
+      e.preventDefault();
+      err.textContent = "";
+      try {
+        const o = await api("POST", "/auth/register/options", { purpose: "pair", secret: code.value });
+        const cred = await createPasskey(o.options);
+        S.session = await api("POST", "/auth/register", { id: o.id, credential: cred, label: deviceLabel() });
+        history.replaceState(null, "", "/");
+        start();
+      } catch (x) { err.textContent = passkeyError(x); }
+    } },
+      h("label", { class: "field" }, h("span", null, T("Code vom angemeldeten Gerät")), code),
+      h("button", { class: "btn primary", type: "submit" }, svg(ICON.key), T("Passkey für dieses Gerät anlegen")), err,
+      h("p", { class: "note" }, h("a", { href: "/" }, T("Zurück zur Anmeldung"))));
+    card = [h("h1", null, T("Gerät koppeln")), h("p", null, T("Auf einem Gerät, auf dem du angemeldet bist: Zugang, dann Gerät koppeln. Den Code hier eingeben, dann bekommt dieses Gerät einen eigenen Passkey.")), form];
   } else {
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
@@ -765,6 +837,7 @@ function door(kind, message) {
     } },
       h("button", { class: "btn primary", type: "submit", autofocus: true }, svg(ICON.key), T("Mit Passkey anmelden")), err);
     card = [h("h1", null, S.session?.title || "Console"), h("p", null, T("Server, Dateien und Spieler an einem Ort.")), form, note,
+      h("p", { class: "note" }, T("Kein Passkey auf diesem Gerät? Wähl im Fenster das Handy (QR-Code), oder "), h("a", { href: "/pair" }, T("koppel es mit einem Code")), "."),
       S.session?.setup ? h("p", { class: "note" }, T("Noch niemand eingerichtet? "), h("a", { href: "/setup" }, T("Ersten Passkey anlegen"))) : null];
   }
   put(app, h("div", { class: "door" }, h("div", { class: "door-card" }, crownMark(), card)));
@@ -1359,7 +1432,7 @@ function pagePlayers(main, rest) {
     put(body, h("section", { class: "panel" }, h("table", { class: "people" },
       h("thead", null, h("tr", null, h("th", null, T("Spieler")), h("th", null, T("Status")), h("th", { class: "hide-s" }, data.roster ? T("Plätze") : ""), h("th", { class: "hide-s right" }, T("Zuletzt da")))),
       h("tbody", null, rows.map(p => h("tr", { class: "click", tabindex: "0", onclick: () => drawer(p), onkeydown: e => { if (e.key === "Enter") drawer(p); } },
-        h("td", null, h("span", { class: "player" }, head(p.name), h("b", null, p.name))),
+        h("td", null, h("span", { class: "player" }, head(p.name), h("span", null, h("b", null, p.name), p.discord ? h("div", { class: "dim small" }, "Discord: " + (p.discord.name || p.discord.id)) : null))),
         h("td", null, h("span", { class: "actions" }, pills(p))),
         h("td", { class: "hide-s muted" }, roleOf(p)),
         h("td", { class: "hide-s right dim" }, p.online ? T("jetzt") : p.seen ? fmt.date(p.seen) : "")))))));
@@ -1410,8 +1483,22 @@ function pagePlayers(main, rest) {
       const n = await confirmDialog({ title: T("Streamer anlegen"), text: T("Der Minecraft-Name. Plätze danach auf der Karte."), ok: T("Anlegen"), input: { label: T("Minecraft-Name"), required: true } });
       if (n) cmd(n + T(" angelegt"), "kw admin grant " + n.trim());
     } }, T("Streamer anlegen")) : null;
+    const inRoster = n => r.streamers.some(s => s.name.toLowerCase() === n.toLowerCase());
+    const linked = (data.linked || []).filter(l => !q || (l.player + " " + (l.discord_name || "")).toLowerCase().includes(q));
+    const kindPill = k => k === "streamer" ? h("span", { class: "pill c", style: { "--c": "var(--violet)" } }, "Streamer") : k === "season1" ? h("span", { class: "pill c", style: { "--c": "var(--teal)" } }, "Season 1") : h("span", { class: "pill" }, T("ohne Platz"));
+    const fresh = at => at && Date.now() - new Date(at).getTime() < 48 * 3600 * 1000;
     put(body,
       h("div", { class: "actions" }, h("span", { class: "muted" }, T("Standard: ") + r.defaultSlots + T(" Plätze pro Streamer.")), h("span", { style: { flex: "1" } }), add),
+      linked.length ? h("details", { class: "panel linked", open: linked.some(l => fresh(l.at)) || null },
+        h("summary", null, T("Über Discord verlinkt"), h("span", { class: "dim" }, " " + linked.length), linked.some(l => fresh(l.at)) ? h("span", { class: "pill warn", style: { marginLeft: "0.6rem" } }, T("neu")) : null),
+        h("table", null, h("tbody", null, linked.map(l => h("tr", null,
+          h("td", null, h("span", { class: "player" }, head(l.player), h("span", null, h("b", null, l.player), h("div", { class: "dim small" }, "Discord: " + (l.discord_name || l.discord_id))))),
+          h("td", null, kindPill(l.kind), fresh(l.at) ? h("span", { class: "pill warn", style: { marginLeft: "0.4rem" } }, T("neu")) : null),
+          h("td", { class: "dim hide-s" }, l.at ? fmt.date(l.at) : ""),
+          h("td", { class: "right" }, inRoster(l.player) ? h("span", { class: "dim" }, T("hat Plätze")) : can("command") ? h("button", { class: "btn small", onclick: async () => {
+            const n = await confirmDialog({ title: l.player + T(" als Streamer anlegen?"), text: T("Bekommt einen eigenen Platz und so viele Plätze für Zuschauer. Leer heißt Standard."), ok: T("Anlegen"), input: { label: T("Plätze"), value: "" } });
+            if (n != null) cmd(l.player + T(" angelegt"), "kw admin grant " + l.player + (n.trim() ? " " + parseInt(n, 10) : ""));
+          } }, T("Plätze geben")) : null)))))) : null,
       list.length ? h("div", { class: "roster" }, list.map(s => {
         const pct = s.slots > 0 ? s.used / s.slots : 0;
         const stepper = (label, value, onSet) => h("span", { class: "stepper" }, h("span", { class: "muted" }, label),
@@ -1854,7 +1941,7 @@ function pageAccess(main) {
   api("GET", "/access").then(a => {
     if (a.me) {
       put(body, h("section", { class: "panel" }, h("div", { class: "body" }, h("p", null, T("Angemeldet als "), h("b", null, a.me.name), T(", Rolle "), T(ROLE_DE[a.me.role]) || a.me.role, "."),
-        h("button", { class: "btn", onclick: addPasskey }, svg(ICON.key), T("Weiteren Passkey anlegen")))));
+        h("div", { class: "actions" }, h("button", { class: "btn", onclick: addPasskey }, svg(ICON.key), T("Weiteren Passkey anlegen")), h("button", { class: "btn", onclick: pairDevice }, T("Gerät koppeln"))))));
       return;
     }
     const me = S.session.user.id;
@@ -1898,6 +1985,7 @@ function pageAccess(main) {
     put(body, 
       h("section", { class: "panel" }, h("header", null, h("h2", null, T("Personen")), h("div", { class: "actions" },
         h("button", { class: "btn small", onclick: addPasskey }, svg(ICON.key), T("Passkey für mich")),
+        h("button", { class: "btn small", onclick: pairDevice }, T("Gerät koppeln")),
         h("button", { class: "btn small primary", onclick: invite }, T("Einladen")))),
         h("table", null, h("tbody", null, a.users.map(u => h("tr", null,
           h("td", null, h("b", null, u.name), u.id === me ? h("span", { class: "dim" }, T(" (du)")) : null,
@@ -2138,6 +2226,29 @@ function pageServer(main, rest) {
       } }, T("Entfernen")))) : null);
 }
 
+/** Shows a code that lets another device of the same person make its own passkey. */
+async function pairDevice() {
+  let r;
+  try { r = await api("POST", "/access/pair", {}); } catch (e) { return toast(T("Kein Code"), e.message, true); }
+  const left = h("span", { class: "dim" });
+  const d = h("dialog", null, h("form", { method: "dialog" },
+    h("h2", null, T("Gerät koppeln")),
+    h("p", null, T("Auf dem anderen Gerät ") + S.session.host + T(" öffnen, unten auf koppel es mit einem Code tippen und diesen Code eingeben:")),
+    h("div", { class: "paircode" }, r.code),
+    h("p", null, T("Gilt einmal, noch "), left, "."),
+    h("div", { class: "actions" }, h("button", { class: "btn primary", value: "ok" }, T("Fertig")))));
+  const tick = () => {
+    const s = Math.max(0, r.expires - Math.floor(Date.now() / 1000));
+    left.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + " min";
+    if (s === 0) d.close();
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  d.addEventListener("close", () => { clearInterval(timer); d.remove(); });
+  document.body.append(d);
+  d.showModal();
+}
+
 // ---- command palette ---------------------------------------------------------------------------------
 
 function paletteItems() {
@@ -2165,27 +2276,263 @@ function paletteItems() {
   return items;
 }
 
-function openPalette() {
+// ---- the command line in the palette ---------------------------------------------------------------
+// Ctrl K searches and runs. A line that starts with a verb is a command; several are chained
+// with && (stop at the first error) or ; (carry on). Tab completes verbs, servers, players,
+// streamers and pages. Examples:
+//   restart mining && say "Mining ist gleich wieder da"
+//   streamer add Elchi_Dev 5 && invite Elchi_Dev KwTester
+//   /time set day            (a Minecraft command on the first server)
+//   @mining weather clear    (on another server)
+
+const SH = { people: null, roster: null, loaded: 0 };
+
+async function shellData(force) {
+  if (!force && SH.people && Date.now() - SH.loaded < 30000) return;
+  try {
+    const d = await api("GET", "/people");
+    SH.people = d.players.map(p => p.name);
+    SH.roster = (d.roster?.streamers || []).map(s => s.name);
+    SH.loaded = Date.now();
+  } catch { SH.people ||= []; SH.roster ||= []; }
+}
+
+function tokenize(s) {
+  const out = [];
+  const re = /"([^"]*)"?|(\S+)/g;
+  let m;
+  while ((m = re.exec(s))) out.push({ text: m[1] ?? m[2], quoted: m[1] != null, end: re.lastIndex });
+  return out;
+}
+
+function splitChain(line) {
+  const parts = [];
+  let cur = "", quote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') quote = !quote;
+    if (!quote && (line.startsWith("&&", i) || c === ";")) {
+      parts.push({ text: cur.trim(), stop: line.startsWith("&&", i) });
+      cur = "";
+      if (c === "&") i++;
+      continue;
+    }
+    cur += c;
+  }
+  parts.push({ text: cur.trim(), stop: true });
+  return parts.filter(p => p.text);
+}
+
+const servers = () => S.overview.servers.map(s => s.name);
+const mainServer = () => S.overview.servers[0].name;
+const mc = (server, command) => api("POST", "/servers/" + server + "/command", { cmd: command }).then(a => {
+  if (/^ERR/.test(a || "")) throw new Error(a.replace(/^ERR\s*/, ""));
+  return (a || "").replace(/^OK\s*/, "").trim() || T("erledigt");
+});
+const forServers = async (name, fn) => {
+  const list = name ? [name] : servers();
+  const out = [];
+  for (const n of list) out.push(n + ": " + await fn(n));
+  return out.join(", ");
+};
+
+/** Verbs: words to match, argument kinds, what it says it does, and what it does. */
+const VERBS = [
+  { w: ["start"], a: ["server?"], say: a => T("Starte ") + (a[0] || T("alle Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/power", { action: "start" })) },
+  { w: ["stop"], a: ["server?"], say: a => T("Stoppe ") + (a[0] || T("alle Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/power", { action: "stop" })) },
+  { w: ["restart"], a: ["server?"], say: a => T("Starte neu: ") + (a[0] || T("alle Server")), scope: "power",
+    run: a => forServers(a[0], n => api("POST", "/servers/" + n + "/power", { action: "restart" })) },
+  { w: ["kill"], a: ["server"], say: a => T("Beende hart: ") + a[0], scope: "power",
+    run: a => api("POST", "/servers/" + a[0] + "/power", { action: "kill" }) },
+  { w: ["run"], a: ["server", "text"], say: a => a[0] + ": /" + a[1], scope: "command", run: a => mc(a[0], a[1]) },
+  { w: ["say"], a: ["text"], say: a => T("Sage: ") + a[0], scope: "players", run: a => mc(mainServer(), "say " + a[0]) },
+  { w: ["msg"], a: ["player", "text"], say: a => T("Nachricht an ") + a[0], scope: "players", run: a => mc(onlineServer(a[0]), "tell " + a[0] + " " + a[1]) },
+  { w: ["kick"], a: ["player", "text?"], say: a => T("Kicke ") + a[0], scope: "players", run: a => mc(onlineServer(a[0]), "kick " + a[0] + (a[1] ? " " + a[1] : "")) },
+  { w: ["ban"], a: ["player", "text?"], say: a => T("Banne ") + a[0], scope: "players", run: a => mc(mainServer(), "ban " + a[0] + (a[1] ? " " + a[1] : "")) },
+  { w: ["pardon"], a: ["player"], say: a => T("Entbanne ") + a[0], scope: "players", run: a => mc(mainServer(), "pardon " + a[0]) },
+  { w: ["op"], a: ["player"], say: a => "Op: " + a[0], scope: "command", run: a => mc(mainServer(), "op " + a[0]) },
+  { w: ["deop"], a: ["player"], say: a => "Deop: " + a[0], scope: "command", run: a => mc(mainServer(), "deop " + a[0]) },
+  { w: ["whitelist", "add"], a: ["player"], say: a => T("Whitelist: ") + a[0], scope: "players", run: a => mc(mainServer(), "whitelist add " + a[0]) },
+  { w: ["whitelist", "remove"], a: ["player"], say: a => T("Von der Whitelist: ") + a[0], scope: "players", run: a => mc(mainServer(), "whitelist remove " + a[0]) },
+  { w: ["streamer", "add"], a: ["player", "num?"], say: a => T("Streamer anlegen: ") + a[0] + (a[1] ? ", " + a[1] + T(" Plätze") : ""), scope: "command", core: true,
+    run: a => mc(mainServer(), "kw admin grant " + a[0] + (a[1] ? " " + a[1] : "")) },
+  { w: ["add", "streamer"], a: ["player", "num?"], say: a => T("Streamer anlegen: ") + a[0] + (a[1] ? ", " + a[1] + T(" Plätze") : ""), scope: "command", core: true, hidden: true,
+    run: a => mc(mainServer(), "kw admin grant " + a[0] + (a[1] ? " " + a[1] : "")) },
+  { w: ["streamer", "remove"], a: ["streamer"], say: a => T("Streamer entfernen: ") + a[0], scope: "command", core: true, run: a => mc(mainServer(), "kw admin ungrant " + a[0]) },
+  { w: ["slots"], a: ["streamer", "num"], say: a => a[0] + ": " + a[1] + T(" Plätze"), scope: "command", core: true, run: a => mc(mainServer(), "kw admin slots " + a[0] + " " + a[1]) },
+  { w: ["whitelist", "slots"], a: ["streamer", "num"], say: a => a[0] + ": " + a[1] + T(" Plätze"), scope: "command", core: true, hidden: true, run: a => mc(mainServer(), "kw admin slots " + a[0] + " " + a[1]) },
+  { w: ["bonus"], a: ["streamer", "num"], say: a => a[0] + ": Bonus " + a[1], scope: "command", core: true, run: a => mc(mainServer(), "kw admin bonus " + a[0] + " " + a[1]) },
+  { w: ["invite"], a: ["streamer", "player"], say: a => a[1] + T(" auf einen Platz von ") + a[0], scope: "command", core: true, run: a => mc(mainServer(), "kw admin invite " + a[0] + " " + a[1]) },
+  { w: ["revoke"], a: ["streamer", "player"], say: a => T("Platz frei: ") + a[1] + T(" bei ") + a[0], scope: "command", core: true, run: a => mc(mainServer(), "kw admin revoke " + a[0] + " " + a[1]) },
+  { w: ["pack", "update"], a: [], say: () => T("Pack aktualisieren (alle Server starten neu)"), scope: "pack", run: () => api("POST", "/pack/update", {}) },
+  { w: ["reload"], a: [], say: () => T("Launcher neu laden"), scope: "power", run: () => api("POST", "/launcher/reload", {}) },
+  { w: ["wait"], a: ["num"], say: a => T("Warte ") + a[0] + " s", run: a => new Promise(r => setTimeout(() => r(T("gewartet")), Math.min(600, +a[0]) * 1000)) },
+  { w: ["go"], a: ["page"], say: a => T("Gehe zu ") + a[0], run: a => { const p = PAGES.find(x => T(x.name).toLowerCase().startsWith(a[0].toLowerCase()) || x.path.slice(1).startsWith(a[0].toLowerCase())); if (!p) throw new Error(T("Keine Seite ") + a[0]); go(p.path); return T("da"); } },
+  { w: ["open"], a: ["server"], say: a => T("Öffne ") + a[0], run: a => { go("/server/" + a[0]); return T("da"); } },
+  { w: ["console"], a: ["server?"], say: a => T("Konsole ") + (a[0] || mainServer()), run: a => { go("/konsole/" + (a[0] || mainServer())); return T("da"); } },
+  { w: ["new", "server"], a: [], say: () => T("Neuer Server"), scope: "config", run: () => { newServerWizard(); return T("Assistent offen"); } },
+];
+
+function onlineServer(player) {
+  const s = S.overview.servers.find(x => x.players.some(p => p.toLowerCase() === player.toLowerCase()));
+  return s ? s.name : mainServer();
+}
+
+const verbsHere = () => VERBS.filter(v => (!v.scope || can(v.scope)) && (!v.core || S.session.season));
+
+/** Parses one command. Returns {verb, args, say} or {error} or null when it is not a command. */
+function parseOne(text) {
+  if (text.startsWith("/")) return can("command") || can("players") ? { args: [], say: mainServer() + ": " + text, run: () => mc(mainServer(), text.slice(1)) } : { error: T("Keine Befehle erlaubt") };
+  const at = /^@(\S+)\s+(.+)$/.exec(text);
+  if (at) {
+    if (!servers().includes(at[1])) return { error: T("Kein Server ") + at[1] };
+    return { args: [], say: at[1] + ": /" + at[2], run: () => mc(at[1], at[2].replace(/^\//, "")) };
+  }
+  const toks = tokenize(text);
+  const v = verbsHere().find(v => v.w.every((w, i) => (toks[i]?.text || "").toLowerCase() === w));
+  if (!v) return null;
+  const rest = toks.slice(v.w.length);
+  const args = [];
+  for (let i = 0; i < v.a.length; i++) {
+    const kind = v.a[i], opt = kind.endsWith("?"), base = kind.replace("?", "");
+    if (base === "text") {
+      const from = rest[i];
+      if (!from) { if (opt) break; return { error: T("Es fehlt: Text") }; }
+      const prevEnd = toks[v.w.length + i - 1]?.end ?? 0;
+      const raw = text.slice(prevEnd).trim();
+      args.push(/^"[^"]*"$/.test(raw) ? raw.slice(1, -1) : raw);
+      break;
+    }
+    const t = rest[i]?.text;
+    if (t == null) { if (opt) continue; return { error: T("Es fehlt: ") + T(ARG_NAME[base]) }; }
+    if (base === "server" && !servers().includes(t)) return { error: T("Kein Server ") + t };
+    if (base === "num" && !/^-?\d+$/.test(t)) return { error: t + T(" ist keine Zahl") };
+    if (base === "player" && !/^[A-Za-z0-9_]{2,16}$/.test(t)) return { error: t + T(" ist kein Minecraft-Name") };
+    args.push(t);
+  }
+  return { verb: v, args, say: v.say(args), run: () => v.run(args) };
+}
+
+const ARG_NAME = { server: "Server", player: "Spieler", streamer: "Streamer", num: "Zahl", text: "Text", page: "Seite" };
+
+/** Candidates for the word under the cursor. */
+function complete(line) {
+  const parts = splitChain(line + "\u0000");
+  const seg = (parts[parts.length - 1]?.text || "").replace("\u0000", "");
+  const toks = tokenize(seg);
+  const endsSpace = /\s$/.test(seg) || seg === "";
+  const cur = endsSpace ? "" : (toks[toks.length - 1]?.text || "");
+  const done = endsSpace ? toks : toks.slice(0, -1);
+  const lower = cur.toLowerCase();
+  if (seg.startsWith("@") && done.length === 0) return servers().map(s => "@" + s + " ").filter(s => s.startsWith(cur));
+  if (seg.startsWith("@") || seg.startsWith("/")) return [];
+  const words = done.map(t => t.text.toLowerCase());
+  const cands = new Set();
+  for (const v of verbsHere()) {
+    if (v.hidden && words.length < v.w.length) continue;
+    let ok = true;
+    for (let i = 0; i < Math.min(words.length, v.w.length); i++) if (v.w[i] !== words[i]) ok = false;
+    if (!ok) continue;
+    if (words.length < v.w.length) { cands.add(v.w[words.length]); continue; }
+    const kind = (v.a[words.length - v.w.length] || "").replace("?", "");
+    const list = kind === "server" ? servers() : kind === "player" ? (SH.people || []) : kind === "streamer" ? (SH.roster || [])
+      : kind === "page" ? PAGES.filter(p => !p.hidden).map(p => p.path.slice(1) || "overview") : [];
+    list.forEach(x => cands.add(x));
+  }
+  return [...cands].filter(c => c.toLowerCase().startsWith(lower) && c.toLowerCase() !== lower).sort().slice(0, 12)
+    .map(c => line.slice(0, line.length - cur.length) + (/\s/.test(c) ? '"' + c + '"' : c) + " ");
+}
+
+function openPalette(initial) {
   if ($("dialog.palette")) return;
-  const input = h("input", { type: "text", placeholder: T("Wohin, oder was tun?"), "aria-label": T("Suchen") });
+  shellData();
+  const input = h("input", { type: "text", value: initial || "", placeholder: T("Suchen, oder einen Befehl: restart mining && say Hallo"), "aria-label": T("Suchen oder Befehl"), spellcheck: "false", autocomplete: "off" });
   const list = h("ul", { role: "listbox" });
-  const d = h("dialog", { class: "palette" }, input, list);
-  let items = paletteItems(), shown = [], sel = 0;
+  const out = h("div", { class: "pal-out" });
+  const hint = h("div", { class: "pal-hint dim" }, T("Tab ergänzt, Enter führt aus, && verkettet, ; macht trotz Fehler weiter. help zeigt alle Befehle."));
+  const d = h("dialog", { class: "palette" }, input, list, out, hint);
+  let items = paletteItems(), shown = [], sel = 0, hist = storage("palette") || [], at = hist.length;
+  const plan = () => {
+    const parts = splitChain(input.value.trim());
+    if (!parts.length) return null;
+    const steps = parts.map(p => ({ ...parseOne(p.text), stop: p.stop, text: p.text }));
+    if (steps.some(s => s.error === undefined && !s.run)) return null;
+    if (!steps[0].run && !steps[0].error) return null;
+    return steps;
+  };
   const draw = () => {
     const q = input.value.toLowerCase().trim();
-    shown = items.filter(i => !q || q.split(/\s+/).every(w => (i.name + " " + i.hint).toLowerCase().includes(w))).slice(0, 30);
+    const steps = plan();
+    const comps = q ? complete(input.value) : [];
+    const rows = [];
+    if (q === "help" || q === "hilfe") {
+      for (const v of verbsHere().filter(v => !v.hidden)) rows.push({ kind: "help", name: v.w.join(" ") + " " + v.a.map(a => "<" + T(ARG_NAME[a.replace("?", "")]) + (a.endsWith("?") ? "?" : "") + ">").join(" "), hint: "", act: () => { input.value = v.w.join(" ") + " "; draw(); } });
+    } else if (steps) {
+      const bad = steps.find(s => s.error);
+      rows.push({ kind: "run", name: bad ? bad.error : steps.map(s => s.say).join(steps.length > 1 ? "  >  " : ""), hint: bad ? T("unvollständig") : T("Enter führt aus"), bad: !!bad, act: () => runSteps(steps) });
+    }
+    for (const c of comps) rows.push({ kind: "comp", name: c.trim(), hint: "Tab", act: () => { input.value = c; draw(); } });
+    if (!steps) {
+      for (const i of items.filter(i => !q || q.split(/\s+/).every(w => (i.name + " " + i.hint).toLowerCase().includes(w))).slice(0, 25)) rows.push({ kind: "item", ...i });
+    }
+    shown = rows;
     sel = Math.min(sel, Math.max(0, shown.length - 1));
-    put(list, ...shown.map((i, k) => h("li", { role: "option", "aria-selected": String(k === sel), onmousedown: e => { e.preventDefault(); pick(k); } }, i.name, h("small", null, i.hint))));
+    put(list, shown.map((r, k) => h("li", { role: "option", class: r.kind + (r.bad ? " bad" : ""), "aria-selected": String(k === sel), onmousedown: e => { e.preventDefault(); sel = k; pick(); } },
+      r.kind === "run" ? h("span", null, h("b", null, r.bad ? "" : T("Ausführen: ")), r.name) : r.name, h("small", null, r.hint))));
   };
-  const pick = k => { const i = shown[k]; d.close(); if (i) i.act(); };
+  const pick = () => {
+    const r = shown[sel];
+    if (!r) return;
+    if (r.kind === "item") { d.close(); r.act(); } else if (!r.bad) r.act();
+  };
+  const runSteps = async steps => {
+    const line = input.value.trim();
+    hist = [...hist.filter(x => x !== line), line].slice(-50);
+    storage("palette", hist);
+    at = hist.length;
+    input.value = "";
+    draw();
+    for (const s of steps) {
+      const row = h("div", { class: "pal-line" }, h("span", { class: "pill" }, "..."), h("span", null, s.say));
+      out.append(row);
+      out.scrollTop = out.scrollHeight;
+      try {
+        const r = await s.run();
+        row.firstChild.replaceWith(h("span", { class: "pill ok" }, "ok"));
+        if (r && typeof r === "string" && r !== T("da")) row.append(h("span", { class: "dim" }, " " + (r.length > 200 ? r.slice(0, 200) + "..." : r)));
+      } catch (e) {
+        row.firstChild.replaceWith(h("span", { class: "pill bad" }, T("Fehler")));
+        row.append(h("span", { class: "dim" }, " " + e.message));
+        if (s.stop) break;
+      }
+    }
+    shellData(true);
+    refreshOverview();
+  };
   input.addEventListener("input", () => { sel = 0; draw(); });
   input.addEventListener("keydown", e => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (e.key === "Tab") {
       e.preventDefault();
-      sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % Math.max(1, shown.length);
+      const c = complete(input.value);
+      if (c.length) { input.value = c[0]; sel = 0; draw(); }
+    } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.altKey) {
+      e.preventDefault();
+      at = Math.max(0, Math.min(hist.length, at + (e.key === "ArrowUp" ? -1 : 1)));
+      input.value = hist[at] || "";
+      draw();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!shown.length) return;
+      sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
       draw();
       $$("li", list)[sel]?.scrollIntoView({ block: "nearest" });
-    } else if (e.key === "Enter") { e.preventDefault(); pick(sel); }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const steps = plan();
+      if (steps && !steps.some(s => s.error)) runSteps(steps); else pick();
+    }
   });
   d.addEventListener("close", () => d.remove());
   d.addEventListener("click", e => { if (e.target === d) d.close(); });
@@ -2193,6 +2540,7 @@ function openPalette() {
   draw();
   d.showModal();
   input.focus();
+  shellData().then(draw);
 }
 
 document.addEventListener("keydown", e => {
@@ -2226,9 +2574,10 @@ async function start() {
   if (!S.session.user) {
     if (path === "/setup" && S.session.setup) return door("setup");
     if (path === "/invite" && location.hash.length > 1) return door("invite");
+    if (path === "/pair") return door("pair");
     return door("login");
   }
-  if (path === "/setup" || path === "/invite") history.replaceState(null, "", "/");
+  if (path === "/setup" || path === "/invite" || path === "/pair") history.replaceState(null, "", "/");
   try {
     S.overview = await api("GET", "/overview");
   } catch (e) {

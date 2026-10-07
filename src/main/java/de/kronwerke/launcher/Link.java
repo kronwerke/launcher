@@ -316,6 +316,12 @@ public final class Link {
                 return files.delete(Json.str(a, "path", ""));
             case "launcher-update":
                 return Updater.install(fleet, Json.str(a, "url", ""), Json.str(a, "sha256", ""), Json.bool(a, "reload", true));
+            case "discord-links": {
+                // who told the bot their Minecraft name; the console shows them with the players
+                Object links = a.get("links");
+                java.nio.file.Files.writeString(fleet.home().resolve("discord-links.json"), Json.write(links == null ? List.of() : links));
+                return "stored";
+            }
             case "reload":
                 work.submit(fleet::reload);
                 return "reloading the launcher";

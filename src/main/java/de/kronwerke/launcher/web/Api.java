@@ -305,12 +305,12 @@ final class Api {
             web.audit.add(r.who, ip, "add passkey", null, e.getMessage(), false);
             throw e;
         }
-        if (r.who != null && "session".equals(r.who.kind())) {
+        if (r.who != null && "session".equals(r.who.kind()) && r.who.id().equals(user.get("id"))) {
             web.audit.add(r.who, ip, "add passkey", null, Json.str(b, "label", ""), true);
             r.ok(session(r));
             return;
         }
-        signIn(r, user, ip, "first passkey");
+        signIn(r, user, ip, "new passkey");
     }
 
     private void signIn(Web.Req r, Map<String, Object> user, String ip, String what) throws IOException {
@@ -408,7 +408,14 @@ final class Api {
         for (Server s : fleet.servers()) {
             for (String n : s.metrics().players()) get.apply(n).put("online", s.name());
         }
-        Map<String, Object> out = Json.map("server", main.name(), "players", new ArrayList<>(byName.values()),
+        // members who linked their name on Discord (pushed by the Kronwerke bot)
+        List<Object> linked = jsonList(fleet.home().resolve("discord-links.json"));
+        for (Object o : linked) {
+            if (!(o instanceof Map<?, ?> m) || m.get("player") == null) continue;
+            Map<String, Object> p = get.apply(String.valueOf(m.get("player")));
+            p.put("discord", Json.map("id", m.get("discord_id"), "name", m.get("discord_name"), "kind", m.get("kind"), "at", m.get("at")));
+        }
+        Map<String, Object> out = Json.map("server", main.name(), "players", new ArrayList<>(byName.values()), "linked", linked,
                 "whitelist", Proc.whitelistOn(main.properties()));
         if (web.season() && main.state() == Server.State.RUNNING) out.put("roster", core(main, "kw admin roster json"));
         return out;
@@ -914,6 +921,14 @@ final class Api {
     private void accessRoute(Web.Req r, String[] p) throws Exception {
         String m = r.method();
         String what = p.length > 1 ? p[1] : "";
+        if (what.equals("pair")) {
+            post(m);
+            if (!"session".equals(r.who.kind())) throw new SecurityException("only people pair devices");
+            Map<String, Object> pr = access.newPairing(r.who.id());
+            web.audit.add(r.who, r.ip(), "pairing code", null, "", true);
+            r.ok(pr);
+            return;
+        }
         if (what.isEmpty()) {
             if (!r.who.can("access")) {
                 // everyone sees themselves

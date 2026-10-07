@@ -75,7 +75,7 @@ final class Access {
         this.origins = origins;
         Files.createDirectories(dir);
         Map<String, Object> d = Files.exists(file) ? Json.object(Files.readString(file)) : new LinkedHashMap<>();
-        for (String k : List.of("users", "invites", "keys", "sessions")) {
+        for (String k : List.of("users", "invites", "keys", "sessions", "pairings")) {
             if (!(d.get(k) instanceof List)) d.put(k, new ArrayList<>());
         }
         this.data = d;
@@ -216,6 +216,28 @@ final class Access {
         return token;
     }
 
+    /**
+     * A code that lets the signed in user add a passkey on another device, for ten minutes and
+     * once. Typed on the other device, so it is short.
+     */
+    synchronized Map<String, Object> newPairing(String userId) throws IOException {
+        String code = code();
+        long exp = Instant.now().getEpochSecond() + 600;
+        list("pairings").removeIf(p -> userId.equals(p.get("user")) || Json.num(p, "expires", 0) < Instant.now().getEpochSecond());
+        list("pairings").add(Json.map("hash", hash(normalizeCode(code)), "user", userId, "expires", exp));
+        save();
+        return Json.map("code", code, "expires", exp);
+    }
+
+    private Map<String, Object> pairing(String code) {
+        String h = hash(normalizeCode(code));
+        long now = Instant.now().getEpochSecond();
+        for (Map<String, Object> p : list("pairings")) {
+            if (h.equals(p.get("hash")) && Json.num(p, "expires", 0) >= now) return p;
+        }
+        return null;
+    }
+
     synchronized boolean dropInvite(String id) throws IOException {
         boolean r = list("invites").removeIf(i -> id.equals(i.get("id")));
         if (r) save();
@@ -307,9 +329,17 @@ final class Access {
                 if (who == null || !"session".equals(who.kind())) throw new SecurityException("sign in first");
                 ctx.put("user", who.id());
             }
+            case "pair" -> {
+                Map<String, Object> p = pairing(secret);
+                if (p == null) throw new SecurityException("the code is unknown or expired");
+                Map<String, Object> u = user(Json.str(p, "user", ""));
+                if (u == null) throw new SecurityException("the code is unknown or expired");
+                ctx.put("user", u.get("id"));
+                ctx.put("pairing", p.get("hash"));
+            }
             default -> throw new IllegalArgumentException("unknown purpose");
         }
-        String userName = ctx.containsKey("user") ? who.name() : Json.str(ctx, "name", "").trim();
+        String userName = ctx.containsKey("user") ? Json.str(user(String.valueOf(ctx.get("user"))), "name", "") : Json.str(ctx, "name", "").trim();
         if (userName.isEmpty() || userName.length() > 40) throw new IllegalArgumentException("a name of up to 40 characters");
         String userId = ctx.containsKey("user") ? (String) ctx.get("user") : "u_" + token("").substring(0, 12);
         ctx.put("newUser", userId);
@@ -368,6 +398,10 @@ final class Access {
             }
         }
         Map<String, Object> ctx = c.context();
+        if (ctx.containsKey("pairing")) {
+            Object h = ctx.get("pairing");
+            if (!list("pairings").removeIf(p -> h.equals(p.get("hash")))) throw new SecurityException("the code was used meanwhile");
+        }
         String userId = Json.str(ctx, "newUser", "");
         Map<String, Object> u = user(userId);
         long now = Instant.now().getEpochSecond();

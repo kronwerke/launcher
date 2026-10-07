@@ -285,6 +285,9 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; width: min
 .chip button:hover { color: var(--bad); }
 .chip.add { cursor: pointer; color: var(--mute); border-style: dashed; padding: 0.2rem 0.7rem; background: transparent; }
 .chip.add:hover { color: var(--star); border-color: var(--line-2); }
+.paircode { font: 600 2.2rem/1.2 var(--mono); letter-spacing: 0.12em; text-align: center; padding: 1rem; border-radius: var(--r); background: var(--night); border: 1px solid var(--line-2); user-select: all; }
+.small { font-size: 0.75rem; }
+details.linked summary { cursor: pointer; padding: 0.85rem 1rem; font-weight: 650; }
 .stepper { display: inline-flex; align-items: center; gap: 0.35rem; }
 .stepper b { min-width: 1.5rem; text-align: center; }
 
@@ -380,7 +383,16 @@ dialog .actions { justify-content: flex-end; }
 .palette ul { list-style: none; margin: 0; padding: 0.4rem; max-height: 22rem; overflow-y: auto; }
 .palette li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.55rem 0.75rem; border-radius: var(--r-s); cursor: pointer; }
 .palette li[aria-selected="true"] { background: var(--raised); }
-.palette li small { color: var(--dim); }
+.palette li small { color: var(--dim); white-space: nowrap; }
+.palette input { font-family: var(--mono); font-size: 0.9375rem; }
+.palette li.run { background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.palette li.run[aria-selected="true"] { background: color-mix(in srgb, var(--gold) 20%, transparent); }
+.palette li.bad { color: var(--warn); }
+.palette li.comp, .palette li.help { font-family: var(--mono); font-size: 0.8125rem; }
+.pal-out { max-height: 12rem; overflow-y: auto; padding: 0 0.75rem; display: grid; gap: 0.3rem; }
+.pal-out:empty { display: none; }
+.pal-line { font-size: 0.8125rem; display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+.pal-hint { padding: 0.55rem 1rem; border-top: 1px solid var(--line); font-size: 0.75rem; }
 
 #toasts { position: fixed; right: 1rem; bottom: 1rem; display: grid; gap: 0.5rem; z-index: 50; max-width: min(26rem, calc(100vw - 2rem)); }
 .toast { padding: 0.7rem 0.9rem; border-radius: var(--r-s); background: var(--raised); border: 1px solid var(--line-2); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); animation: rise 0.25s var(--ease); }
