@@ -609,8 +609,12 @@ final class Api {
         Server main = fleet.servers().stream().filter(Server::minecraft).findFirst().orElse(fleet.main());
         Map<String, Map<String, Object>> byName = new java.util.TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         java.util.function.Function<String, Map<String, Object>> get = n -> byName.computeIfAbsent(n, k -> Json.map("name", k));
+        // usercache.json also keeps every name a command looked up (a typo in /whitelist add)
+        // and the load test's offline bots; only real accounts that played are people here
+        Path playerdata = main.dir().resolve(de.kronwerke.launcher.Backups.levelName(main)).resolve("playerdata");
         for (Object o : jsonList(main.dir().resolve("usercache.json"))) {
             if (!(o instanceof Map<?, ?> m)) continue;
+            if (!playedOnline(playerdata, String.valueOf(m.get("uuid")))) continue;
             Map<String, Object> p = get.apply(String.valueOf(m.get("name")));
             p.put("uuid", m.get("uuid"));
             p.put("seen", lastSeen(String.valueOf(m.get("expiresOn"))));
@@ -638,6 +642,16 @@ final class Api {
                 "whitelist", Proc.whitelistOn(main.properties()));
         if (web.season() && main.state() == Server.State.RUNNING) out.put("roster", core(main, "kw admin roster json"));
         return out;
+    }
+
+    /** A Mojang account (offline and bot UUIDs are version 3) with a player file on main. */
+    static boolean playedOnline(Path playerdata, String uuid) {
+        try {
+            if (java.util.UUID.fromString(uuid).version() != 4) return false;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        return Files.exists(playerdata.resolve(uuid + ".dat"));
     }
 
     private static List<Object> jsonList(Path file) {

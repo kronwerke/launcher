@@ -43,7 +43,7 @@ public final class Backups {
     }
 
     /** The world folder: level-name from server.properties, "world" without one. */
-    static String levelName(Server s) {
+    public static String levelName(Server s) {
         try {
             for (String l : Files.readAllLines(s.properties(), StandardCharsets.ISO_8859_1)) {
                 if (l.startsWith("level-name=")) {

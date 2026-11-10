@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+
+- The console's people list only shows real accounts that played on the main server: the load test's offline bots and names a command only looked up (a typo in `/whitelist add`) stay out. Whitelisted, operator, banned, linked and online players are listed as before.
+
 ## 0.7.1
 
 - A scheduled restart or stop leaves a server alone while its world is being reset or backed up.
