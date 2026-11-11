@@ -139,6 +139,12 @@ public final class Config {
             # java to use (empty: the launcher's setting), program arguments.
             memory=%s
             jvm.args=
+
+            # A smaller heap to start with (empty: all of memory from the start). The server takes
+            # more as players come, up to memory, and gives it back after they leave. For servers
+            # that are only busy now and then, like the Nether and the End: the launcher reserves
+            # the start heap of each of them and the extra of the largest one.
+            memory.min=
             java=
             args=nogui
 

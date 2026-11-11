@@ -489,20 +489,39 @@ public final class Fleet {
         network.linkLists(s, root);
     }
 
-    /** Heap of every server that runs or wants to, plus the JVM's own share, has to fit. */
+    /**
+     * Heap of every server that runs or wants to, plus the JVM's own share, has to fit. A server
+     * with memory.min only counts its start heap, and the largest of their extras on top: the
+     * players are in one place at a time, so of the servers that grow with them one is busy.
+     */
     void checkMemory(Server starting) throws IOException {
         long limit = memoryLimitGb();
         if (limit <= 0) return;
-        long sum = 0;
-        for (Server s : servers()) {
-            if (s != starting && !s.wanted() && s.pid() == 0) continue;
-            long heap = gigabytes(s.config().get("memory"));
-            if (heap > 0) sum += heap + OVERHEAD_GB;
-        }
+        long sum = need(servers(), starting);
         if (sum > limit) {
             throw new IOException("the servers would need " + sum + " GB with this one, the container has " + limit
                     + " GB; lower a heap in " + root.relativize(home) + "/servers");
         }
+    }
+
+    /** What the running, wanted and starting servers need, in GB (see checkMemory). */
+    static long need(List<Server> all, Server starting) {
+        long sum = 0, extra = 0;
+        for (Server s : all) {
+            if (s != starting && !s.wanted() && s.pid() == 0) continue;
+            long[] m = heap(s.config().get("memory"), s.config().get("memory.min"));
+            if (m[0] <= 0) continue;
+            sum += m[1] + OVERHEAD_GB;
+            extra = Math.max(extra, m[0] - m[1]);
+        }
+        return sum + extra;
+    }
+
+    /** {max, start} heap in GB; the start heap is the whole heap without a smaller memory.min. */
+    static long[] heap(String memory, String min) {
+        long max = gigabytes(memory);
+        long start = gigabytes(min);
+        return new long[] {max, start <= 0 || start >= max ? max : start};
     }
 
     public long memoryLimitGb() {
@@ -513,7 +532,7 @@ public final class Fleet {
         return max <= 0 ? 0 : max >> 30;
     }
 
-    static long gigabytes(String mem) {
+    public static long gigabytes(String mem) {
         if (mem == null || mem.isEmpty()) return 0;
         String m = mem.trim().toUpperCase();
         long n = Long.parseLong(m.replaceAll("[^0-9]", ""));
@@ -539,7 +558,8 @@ public final class Fleet {
         cmd.add(sc.get("java").isEmpty() ? java : sc.get("java"));
         String mem = sc.get("memory");
         if (!mem.isEmpty()) {
-            cmd.add("-Xms" + mem);
+            String min = sc.get("memory.min");
+            cmd.add("-Xms" + (min.isEmpty() || gigabytes(min) >= gigabytes(mem) ? mem : min));
             cmd.add("-Xmx" + mem);
         }
         for (String a : (cfg.get("jvm.args") + " " + sc.get("jvm.args")).split("\\s+")) if (!a.isBlank()) cmd.add(a);

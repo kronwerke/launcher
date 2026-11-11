@@ -2,6 +2,7 @@
 
 ## 0.8.1
 
+- `memory.min` per server: a smaller start heap. The server takes memory as players come, up to `memory`, and gives it back after they leave. The memory check counts the start heap of such servers and the largest of their extras once, since the players are in one place at a time: so the Nether, the End and the mining world can each grow large for a crowd without reserving it all the time.
 - A new server on a network takes the network's sharing settings (chat, joins, tab list, lists, player data) from a server already on it. Before, it came with player data sharing off, so a player's inventory stayed behind at a portal to it.
 - A new server's voice port may be the same number as its game port (voice is UDP, the game TCP).
 

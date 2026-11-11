@@ -207,6 +207,8 @@ public final class Tests {
         check(p.get("nether").size() == 2, "fewer CPUs than servers: all share");
         check(Proc.parseCpuList("0-3,8,10-11").equals(List.of(0, 1, 2, 3, 8, 10, 11)) && Proc.cpuList(List.of(1, 2)).equals("1,2"), "cpu lists");
         check(Fleet.gigabytes("20G") == 20 && Fleet.gigabytes("8192M") == 8 && Fleet.gigabytes("") == 0, "heap sizes");
+        check(Fleet.heap("12G", "3G")[0] == 12 && Fleet.heap("12G", "3G")[1] == 3, "start heap below the heap");
+        check(Fleet.heap("8G", "")[1] == 8 && Fleet.heap("8G", "16G")[1] == 8, "no or a larger start heap: the whole heap");
     }
 
     static void answersFromMinecraft() {

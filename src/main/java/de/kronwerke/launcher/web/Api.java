@@ -97,7 +97,7 @@ final class Api {
 
     static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
             "ban ", "pardon ");
-    static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
+    static final Set<String> SERVER_KEYS = Set.of("memory", "memory.min", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
             "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label", "backup.keep");
 
     private final Web web;
@@ -827,6 +827,11 @@ final class Api {
                         case "memory" -> {
                             if (!value.matches("[1-9][0-9]{0,2}G|[1-9][0-9]{2,5}M")) throw new IllegalArgumentException("like 20G or 8192M");
                         }
+                        case "memory.min" -> {
+                            if (!value.isEmpty() && !value.matches("[1-9][0-9]{0,2}G|[1-9][0-9]{2,5}M")) throw new IllegalArgumentException("like 2G or 2048M, or empty");
+                            if (!value.isEmpty() && de.kronwerke.launcher.Fleet.gigabytes(value) > de.kronwerke.launcher.Fleet.gigabytes(s.config().get("memory")))
+                                throw new IllegalArgumentException("larger than memory");
+                        }
                         case "autostart", "restart.on.crash", "sync.joins", "sync.tablist", "sync.lists", "sync.players" -> {
                             if (!value.equals("true") && !value.equals("false")) throw new IllegalArgumentException("true or false");
                         }
@@ -865,7 +870,7 @@ final class Api {
                             // links on the next start
                         }
                     });
-                    return key.equals("memory") || key.equals("jvm.args") ? "saved, applies on the next start" : "saved";
+                    return key.equals("memory") || key.equals("memory.min") || key.equals("jvm.args") ? "saved, applies on the next start" : "saved";
                 });
             }
             case "files" -> {
