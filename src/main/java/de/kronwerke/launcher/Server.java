@@ -515,7 +515,11 @@ public final class Server {
         doneAt = 0;
         try {
             set(State.STARTING, info == null ? type() : (info.version().isEmpty() ? "" : "pack " + info.version() + ", ") + "NeoForge " + info.neoforge());
-            Process proc = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true).start();
+            ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true);
+            // Chronik's console view: port and token per server in the environment, since the
+            // servers may share one config folder (a port in chronik.toml would be the same for all)
+            if (minecraft()) ChronikLink.environment(this, pb.environment(), fleet.home());
+            Process proc = pb.start();
             p = Pump.start(proc, name);
         } catch (IOException e) {
             synchronized (lock) {
@@ -598,11 +602,7 @@ public final class Server {
         if (!cfg.get("transfers").isEmpty()) set.put("accepts-transfers", cfg.get("transfers"));
         if (!set.isEmpty()) Properties.set(props, set);
         if (rcon()) Rcon.prepare(props);
-        try {
-            ChronikLink.prepare(this, dir, fleet.home());
-        } catch (IOException e) {
-            note("Chronik's console view not set up: " + e.getMessage());
-        }
+
         if (!cfg.get("voice.port").isEmpty()) {
             Path voice = dir.resolve("config/voicechat/voicechat-server.properties");
             if (Files.isSymbolicLink(dir.resolve("config/voicechat"))) {

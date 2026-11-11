@@ -22,9 +22,8 @@ import java.util.stream.Stream;
 
 /**
  * The console's view of Chronik, the block and container log in every Minecraft server.
- * Chronik answers lookups on 127.0.0.1 only, with a token; before every start the launcher
- * writes the port (the server's RCON port plus 1000) and the launcher's own token into the
- * server's config/chronik.toml. A lookup in the console asks every running server at once
+ * Chronik answers lookups on 127.0.0.1 only, with a token; the launcher starts every server
+ * with the port (its RCON port plus 1000) and the launcher's own token in the environment. A lookup in the console asks every running server at once
  * and merges the rows by time, with the server as a column (review R3-08: following a
  * griefer into the Nether meant joining every server and typing /co l there).
  */
@@ -73,52 +72,17 @@ public final class ChronikLink {
         }
     }
 
-    /** Before a start: the [web] section of config/chronik.toml gets the port and the token. */
-    static void prepare(Server s, Path dir, Path home) throws IOException {
-        if (!installed(dir)) return;
+    /** Before a start: Chronik's port and token for this server, as CHRONIK_WEB_PORT and CHRONIK_WEB_TOKEN. */
+    static void environment(Server s, Map<String, String> env, Path home) {
+        if (!installed(s.dir())) return;
         int port = port(s);
         if (port == 0) return;
-        Path f = dir.resolve("config/chronik.toml");
-        String token = token(home);
-        Files.createDirectories(f.getParent());
-        String text = Files.exists(f) ? Files.readString(f, StandardCharsets.UTF_8) : "";
-        String next = setWeb(text, port, token);
-        if (!next.equals(text)) Files.writeString(f, next, StandardCharsets.UTF_8);
-    }
-
-    /** Sets port and token in the [web] section, adding what is missing; the rest stays as it is. */
-    static String setWeb(String text, int port, String token) {
-        List<String> lines = new ArrayList<>(text.isEmpty() ? List.of() : List.of(text.split("\n", -1)));
-        if (!lines.isEmpty() && lines.get(lines.size() - 1).isEmpty()) lines.remove(lines.size() - 1);
-        int start = -1, end = lines.size();
-        for (int i = 0; i < lines.size(); i++) {
-            String l = lines.get(i).trim();
-            if (l.equals("[web]")) start = i;
-            else if (start >= 0 && l.startsWith("[")) {
-                end = i;
-                break;
-            }
+        try {
+            env.put("CHRONIK_WEB_PORT", Integer.toString(port));
+            env.put("CHRONIK_WEB_TOKEN", token(home));
+        } catch (IOException e) {
+            s.note("Chronik's console view not set up: " + e.getMessage());
         }
-        if (start < 0) {
-            lines.add("");
-            lines.add("[web]");
-            start = lines.size() - 1;
-            end = lines.size();
-        }
-        boolean hasPort = false, hasToken = false;
-        for (int i = start + 1; i < end; i++) {
-            String l = lines.get(i).trim();
-            if (l.startsWith("port") && l.substring(4).trim().startsWith("=")) {
-                lines.set(i, "\tport = " + port);
-                hasPort = true;
-            } else if (l.startsWith("token") && l.substring(5).trim().startsWith("=")) {
-                lines.set(i, "\ttoken = \"" + token + "\"");
-                hasToken = true;
-            }
-        }
-        if (!hasToken) lines.add(end, "\ttoken = \"" + token + "\"");
-        if (!hasPort) lines.add(end, "\tport = " + port);
-        return String.join("\n", lines) + "\n";
     }
 
     /**

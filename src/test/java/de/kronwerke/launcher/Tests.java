@@ -30,21 +30,12 @@ public final class Tests {
         networkReadsConsoles();
         scheduleFindsTheNextTime();
         releaseSignatures();
-        chronikConfigGetsPortAndToken();
+        chronikTokenIsMadeOnce();
         passed += de.kronwerke.launcher.web.AccessTests.run();
         System.out.println(passed + " checks passed");
     }
 
-    static void chronikConfigGetsPortAndToken() throws IOException {
-        String file = "[log]\n\tretentionDays = 30\n\n[web]\n\t#Port of the JSON API\n\tport = 0\n\t#Bearer token\n\ttoken = \"\"\n\n[other]\n\tx = 1\n";
-        String out = ChronikLink.setWeb(file, 26577, "abc");
-        check(out.contains("\tport = 26577\n") && out.contains("\ttoken = \"abc\"\n"), "port and token set: " + out);
-        check(out.contains("retentionDays = 30") && out.contains("[other]\n\tx = 1") && out.contains("#Port of the JSON API"), "the rest stays");
-        check(ChronikLink.setWeb(out, 26577, "abc").equals(out), "a second run changes nothing");
-        String fresh = ChronikLink.setWeb("", 26578, "t");
-        check(fresh.contains("[web]") && fresh.contains("port = 26578") && fresh.contains("token = \"t\""), "a missing file gets the section: " + fresh);
-        String noToken = ChronikLink.setWeb("[web]\n\tport = 1\n[x]\n", 2, "k");
-        check(noToken.indexOf("token = \"k\"") < noToken.indexOf("[x]"), "a missing key goes into the section");
+    static void chronikTokenIsMadeOnce() throws IOException {
         Path home = Files.createTempDirectory("kw-chronik");
         String t1 = ChronikLink.token(home), t2 = ChronikLink.token(home);
         check(t1.length() >= 32 && t1.equals(t2), "the token is made once");
