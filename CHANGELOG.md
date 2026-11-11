@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- A scheduled restart of main together with side worlds stops the side worlds first, while main still takes their players' state, then restarts main and starts the side worlds once main runs again. Before, all went down at once. (R3-01)
+- A stop may take up to `stop.timeout` seconds (600 by default, 60 to 3600) before the process is killed, with a note in the console at two thirds; it was a fixed 150 seconds, which can cut a large world's save in half. (R3-13)
+- A moderator's `whitelist add` or `remove` returns Kronwerke Core's answer when Core refuses, instead of running the vanilla command, which left Core's slot and the bot's invite behind. (R2-17)
+
 ## 0.8.1
 
 - `memory.min` per server: a smaller start heap. The server takes memory as players come, up to `memory`, and gives it back after they leave. The memory check counts the start heap of such servers and the largest of their extras once, since the players are in one place at a time: so the Nether, the End and the mining world can each grow large for a crowd without reserving it all the time.

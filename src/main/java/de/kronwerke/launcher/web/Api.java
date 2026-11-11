@@ -98,7 +98,7 @@ final class Api {
     static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
             "ban ", "pardon ");
     static final Set<String> SERVER_KEYS = Set.of("memory", "memory.min", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
-            "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label", "backup.keep");
+            "network", "sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players", "label", "backup.keep", "stop.timeout");
 
     private final Web web;
     private final Fleet fleet;
@@ -785,8 +785,12 @@ final class Api {
                     // shows in the bot's roster and is not taken back as a stray entry later
                     String core = coreWhitelist(c);
                     if (core != null && !r.who.can("command")) {
+                        // Core's answer, OK or not: falling back to the vanilla command left
+                        // Core's slot and the bot's invite behind (review R2-17)
                         String answer = s.command(core);
                         if (answer != null && answer.trim().startsWith("OK")) return answer;
+                        String why = answer == null || answer.isBlank() ? "no answer from Kronwerke Core" : answer.trim();
+                        throw new IllegalStateException(why + ". Players a streamer invited are removed by that streamer in Discord (/whitelist remove), in the whitelist app, or by the team in the admin panel.");
                     }
                     String answer = s.command(c);
                     fleet.network().mirror(s, c);
@@ -846,6 +850,10 @@ final class Api {
                         }
                         case "backup.keep" -> {
                             if (!value.matches("[1-9][0-9]?")) throw new IllegalArgumentException("1 to 99");
+                        }
+                        case "stop.timeout" -> {
+                            if (!value.isEmpty() && (!value.matches("[0-9]{2,4}") || Integer.parseInt(value) < 60 || Integer.parseInt(value) > 3600))
+                                throw new IllegalArgumentException("seconds, 60 to 3600, or empty for 600");
                         }
                         case "chat.radius" -> {
                             if (!value.matches("[1-9][0-9]{0,3}")) throw new IllegalArgumentException("1 to 9999 blocks");

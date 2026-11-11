@@ -268,16 +268,62 @@ public final class Schedule {
         }
     }
 
+    /**
+     * Restarts several servers. With main among them the side worlds go down first, while
+     * main still takes their players' state, and come back after main runs again; in
+     * parallel their last reports went to a main that was itself shutting down (review R3-01).
+     */
+    void restartInOrder(List<Server> due) {
+        List<Server> mains = new ArrayList<>(), sides = new ArrayList<>();
+        for (Server s : due) (s.minecraft() && "main".equals(Network.role(s)) ? mains : sides).add(s);
+        if (mains.isEmpty() || sides.isEmpty()) {
+            due.forEach(s -> fleet.submit(s::restart));
+            return;
+        }
+        fleet.submit(() -> {
+            List<Thread> stops = new ArrayList<>();
+            for (Server s : sides) {
+                Thread t = new Thread(s::stop, "stop-" + s.name());
+                t.start();
+                stops.add(t);
+            }
+            for (Thread t : stops) {
+                try {
+                    t.join(300_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            for (Server m : mains) {
+                m.stop();
+                m.start();
+            }
+            long until = System.currentTimeMillis() + 10 * 60_000L;
+            while (System.currentTimeMillis() < until && mains.stream().anyMatch(m -> m.state() != Server.State.RUNNING)) {
+                try {
+                    Thread.sleep(2_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+            sides.forEach(Server::start);
+        });
+    }
+
     /** Runs a task now, from the clock or the console. */
     public void run(Map<String, Object> t) {
         String action = Json.str(t, "action", ""), text = Json.str(t, "text", "");
         fleet.event("schedule", null, Json.str(t, "name", "") + ": " + action + (text.isEmpty() ? "" : " " + text));
         List<Server> targets = targets(t);
         switch (action) {
-            case "restart" -> targets.forEach(s -> {
+            case "restart" -> {
                 // a world being reset or backed up is not restarted in between
-                if (s.wanted() && !fleet.backups().busy(s)) fleet.submit(s::restart);
-            });
+                List<Server> due = new ArrayList<>();
+                for (Server s : targets) if (s.wanted() && !fleet.backups().busy(s)) due.add(s);
+                restartInOrder(due);
+            }
             case "stop" -> targets.forEach(s -> {
                 if (!fleet.backups().busy(s)) fleet.submit(s::stop);
             });

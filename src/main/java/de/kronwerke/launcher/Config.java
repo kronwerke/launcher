@@ -148,6 +148,10 @@ public final class Config {
             java=
             args=nogui
 
+            # Seconds a stop may take before the process is killed (empty: 600). A large modded
+            # world can need minutes to save its chunks; the console warns at two thirds.
+            stop.timeout=
+
             # What the console types to stop it ("stop" for Minecraft; "-" or empty for a program
             # sends a stop signal), and a regular expression on a console line that means
             # "running" (Minecraft: RCON or the Done line; a program: at once).

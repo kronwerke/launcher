@@ -318,6 +318,15 @@ public final class Server {
         return Rcon.command(properties(), cmd);
     }
 
+    long stopTimeout() {
+        String v = cfg.get("stop.timeout");
+        try {
+            return v.isEmpty() ? 600 : Math.max(60, Math.min(3600, Long.parseLong(v)));
+        } catch (NumberFormatException e) {
+            return 600;
+        }
+    }
+
     private void stopChild() {
         Pump p;
         synchronized (lock) {
@@ -333,11 +342,25 @@ public final class Server {
         String stop = cfg.get("stop").isEmpty() ? (minecraft() ? "stop" : "") : cfg.get("stop");
         if (stop.isEmpty() || stop.equals("-")) p.process().destroy();
         else p.send(stop);
+        // a big modded world saving its chunks after a busy evening takes a while: 10 minutes
+        // by default (stop.timeout), with a warning on the way, before it is killed
+        long limit = stopTimeout();
         try {
-            if (!p.process().waitFor(150, TimeUnit.SECONDS)) {
-                note("Did not stop in 150 seconds, killing it");
-                p.process().destroyForcibly();
-                p.process().waitFor(20, TimeUnit.SECONDS);
+            long start = System.currentTimeMillis();
+            boolean warned = false;
+            while (!p.process().waitFor(15, TimeUnit.SECONDS)) {
+                long took = (System.currentTimeMillis() - start) / 1000;
+                if (took >= limit) {
+                    note("Did not stop in " + limit + " seconds, killing it");
+                    p.process().destroyForcibly();
+                    p.process().waitFor(20, TimeUnit.SECONDS);
+                    break;
+                }
+                if (!warned && took >= limit * 2 / 3) {
+                    warned = true;
+                    note("Still saving after " + took + " seconds; killed after " + limit + " (stop.timeout)");
+                    fleet.changed(this);
+                }
             }
             // the last lines still arrive after the exit
             p.awaitEnd();
