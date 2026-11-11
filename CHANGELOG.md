@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- Chronik in the console also reaches servers whose Java binds the loopback address as IPv6 (`::1`).
+
 ## 0.9.2
 
 - Chronik in the console: plain HTTP/1.1 to the servers, and the answer names why a server did not answer.

@@ -99,9 +99,12 @@ public final class ChronikLink {
             if (s.state() != Server.State.RUNNING || !installed(s.dir())) continue;
             int port = port(s);
             if (port == 0) continue;
-            URI uri = URI.create("http://127.0.0.1:" + port + "/lookup?q=" + URLEncoder.encode(q, StandardCharsets.UTF_8) + "&limit=" + limit);
-            HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(35)).header("Authorization", "Bearer " + token).GET().build();
-            asks.put(s.name(), HTTP.sendAsync(req, HttpResponse.BodyHandlers.ofString()));
+            String path = ":" + port + "/lookup?q=" + URLEncoder.encode(q, StandardCharsets.UTF_8) + "&limit=" + limit;
+            // Chronik binds the JVM's loopback address, which is ::1 on a JVM that prefers IPv6
+            HttpRequest v4 = HttpRequest.newBuilder(URI.create("http://127.0.0.1" + path)).timeout(Duration.ofSeconds(35)).header("Authorization", "Bearer " + token).GET().build();
+            HttpRequest v6 = HttpRequest.newBuilder(URI.create("http://[::1]" + path)).timeout(Duration.ofSeconds(35)).header("Authorization", "Bearer " + token).GET().build();
+            asks.put(s.name(), HTTP.sendAsync(v4, HttpResponse.BodyHandlers.ofString())
+                    .exceptionallyCompose(ex -> HTTP.sendAsync(v6, HttpResponse.BodyHandlers.ofString())));
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         String error = null;
