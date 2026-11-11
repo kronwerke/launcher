@@ -1085,6 +1085,7 @@ const PAGES = [
   { path: "/automatik", name: "Automatik", key: "a", draw: pageAutomation },
   { path: "/server", name: "Server", key: "x", draw: pageServer, hidden: true },
   { path: "/verlauf", name: "Verlauf", key: "v", draw: pageHistory },
+  { path: "/chronik", name: "Chronik", key: "c", draw: pageChronik, scope: "players" },
   { path: "/zugang", name: "Zugang", key: "z", draw: pageAccess },
 ];
 
@@ -2536,6 +2537,95 @@ function pageHistory(main, rest) {
         : h("p", { class: "empty" }, T("Keine Absturzberichte. So soll es sein."))));
     });
   }
+}
+
+// ---- chronik: who did what, on every server --------------------------------------------------
+
+const CHRONIK_ACTIONS = [["", "Alles"], ["block", "Blöcke"], ["break", "Abgebaut"], ["place", "Gebaut"], ["container", "Behälter"],
+  ["take", "Genommen"], ["put", "Hineingelegt"], ["kill", "Getötet"], ["item", "Fallen gelassen und aufgehoben"], ["chat", "Chat"], ["command", "Befehle"], ["session", "Kommen und Gehen"]];
+const CHRONIK_DONE = { break: "baut ab", place: "baut", change: "benutzt", take: "nimmt", put: "legt hinein", kill: "tötet", drop: "lässt fallen", pickup: "hebt auf", chat: "schreibt", command: "tippt", join: "kommt", leave: "geht" };
+
+function pageChronik(main) {
+  const minecraft = S.overview.servers.filter(s => s.type !== "command");
+  const who = h("input", { type: "text", placeholder: T("Spielername"), maxlength: 32, autocomplete: "off" });
+  const time = h("select", null, [["1h", "1 Stunde"], ["6h", "6 Stunden"], ["1d", "24 Stunden"], ["3d", "3 Tage"], ["7d", "7 Tage"], ["30d", "30 Tage"]]
+    .map(([v, n]) => h("option", { value: v, selected: v === "1d" || null }, T(n))));
+  const action = h("select", null, CHRONIK_ACTIONS.map(([v, n]) => h("option", { value: v }, T(n))));
+  const what = h("input", { type: "text", placeholder: T("zum Beispiel diamond_block"), maxlength: 80, autocomplete: "off" });
+  const server = h("select", null, h("option", { value: "" }, T("Alle Server")), minecraft.map(s => h("option", { value: s.name }, s.label || s.name)));
+  const raw = h("input", { type: "text", placeholder: "u:Name t:2h a:break b:tnt", maxlength: 200, autocomplete: "off" });
+  const body = h("div", { class: "stack" });
+  const query = () => {
+    if (raw.value.trim()) return raw.value.trim();
+    const parts = [];
+    if (who.value.trim()) parts.push("u:" + who.value.trim().replace(/\s+/g, ""));
+    parts.push("t:" + time.value);
+    if (action.value) parts.push("a:" + action.value);
+    if (what.value.trim()) parts.push("b:" + what.value.trim().replace(/\s+/g, ""));
+    return parts.join(" ");
+  };
+  const search = async e => {
+    e?.preventDefault();
+    const q = query();
+    if (!q.includes("u:") && !q.includes("b:") && !q.includes("a:")) {
+      put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, T("Gib einen Spieler, eine Aktion oder einen Block an, sonst wird es zu viel."))));
+      return;
+    }
+    put(body, h("section", { class: "panel" }, h("p", { class: "empty" }, T("Suche auf allen Servern …"))));
+    try {
+      const r = await api("GET", "/chronik?limit=400&q=" + encodeURIComponent(q) + (server.value ? "&server=" + encodeURIComponent(server.value) : ""));
+      drawRows(r, q);
+    } catch (err) {
+      put(body, h("section", { class: "panel" }, h("p", { class: "error body" }, err.message)));
+    }
+  };
+  const drawRows = (r, q) => {
+    const rows = r.rows || [];
+    const note = (r.missing || []).length ? h("p", { class: "dim body" }, T("Keine Antwort von: ") + r.missing.join(", ") + T(". Die Chronik-Ansicht ist dort erst nach dem nächsten Neustart an.")) : null;
+    const servers = [...new Set(rows.map(x => x.server))];
+    const canRoll = can("command") && /u:\S+/.test(q);
+    const rollback = canRoll && rows.length ? h("div", { class: "actions body" },
+      h("span", { class: "dim" }, T("Zurücksetzen, was diese Suche zeigt:")),
+      servers.map(sv => h("button", { class: "btn small", onclick: () => chronikRollback(sv, q) }, T("Rollback auf ") + sv))) : null;
+    put(body, h("section", { class: "panel" }, note,
+      rows.length ? h("table", null,
+        h("thead", null, h("tr", null, h("th", null, T("Wann")), h("th", null, T("Server")), h("th", null, T("Wer")), h("th", null, T("Was")), h("th", { class: "hide-s" }, T("Wo")))),
+        h("tbody", null, rows.map(x => h("tr", { class: x.rolledBack ? "dim" : null },
+          h("td", { class: "dim" }, fmt.date(x.time)),
+          h("td", null, h("span", { class: "pill c", style: { "--c": colorOf(x.server) } }, x.server)),
+          h("td", null, x.actorName || x.actor || "?", x.via ? h("div", { class: "dim small" }, T("über ") + x.via) : null),
+          h("td", null, T(CHRONIK_DONE[x.action] || x.action), " ",
+            x.text ? h("span", null, x.text) : h("code", null, (x.amount ? x.amount + "× " : "") + short(x.after && x.action !== "break" ? x.after : x.before || x.after || "")),
+            x.rolledBack ? h("span", { class: "pill", style: { marginLeft: "0.4rem" } }, T("zurückgesetzt")) : null),
+          h("td", { class: "dim hide-s num" }, short(x.world) + " " + x.x + " " + x.y + " " + x.z)))))
+        : h("p", { class: "empty" }, T("Nichts gefunden.")),
+      rows.length >= 400 ? h("p", { class: "dim body" }, T("Die ersten 400 Treffer. Schränk die Suche ein, um mehr zu sehen.")) : null,
+      rollback));
+  };
+  const short = id => String(id || "").replace(/^minecraft:/, "").replace(/\[.*$/, "");
+  const form = h("form", { class: "panel body chronik-form", onsubmit: search },
+    h("div", { class: "grid-fields" },
+      h("label", { class: "field" }, h("span", null, T("Spieler")), who),
+      h("label", { class: "field" }, h("span", null, T("Zeitraum")), time),
+      h("label", { class: "field" }, h("span", null, T("Was")), action),
+      h("label", { class: "field" }, h("span", null, T("Block oder Item")), what),
+      h("label", { class: "field" }, h("span", null, T("Server")), server)),
+    h("details", null, h("summary", { class: "dim" }, T("Eigene Abfrage wie im Spiel")),
+      h("label", { class: "field" }, h("span", null, T("Abfrage, ersetzt die Felder oben")), raw)),
+    h("div", { class: "actions" }, h("button", { class: "btn primary", type: "submit" }, T("Suchen"))));
+  main.append(header(T("Chronik"), T("Wer hat was gebaut, abgebaut, genommen oder geschrieben. Auf allen Servern auf einmal.")), form, body);
+  who.focus();
+}
+
+async function chronikRollback(server, q) {
+  // the same two steps as in game: a preview first, then confirm within a minute
+  let preview;
+  try {
+    preview = await api("POST", "/servers/" + server + "/command", { cmd: "co rb " + q });
+  } catch (e) { toast(T("Rollback nicht möglich"), e.message, true); return; }
+  const ok = await confirmDialog({ title: T("Rollback auf ") + server, text: (preview || "").trim() || T("Keine Vorschau."), ok: T("Zurücksetzen"), danger: true });
+  if (!ok) return;
+  await run(T("Rollback läuft"), () => api("POST", "/servers/" + server + "/command", { cmd: "co rb confirm" }));
 }
 
 // ---- access ------------------------------------------------------------------------------------------

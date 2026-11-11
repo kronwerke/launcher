@@ -598,6 +598,11 @@ public final class Server {
         if (!cfg.get("transfers").isEmpty()) set.put("accepts-transfers", cfg.get("transfers"));
         if (!set.isEmpty()) Properties.set(props, set);
         if (rcon()) Rcon.prepare(props);
+        try {
+            ChronikLink.prepare(this, dir, fleet.home());
+        } catch (IOException e) {
+            note("Chronik's console view not set up: " + e.getMessage());
+        }
         if (!cfg.get("voice.port").isEmpty()) {
             Path voice = dir.resolve("config/voicechat/voicechat-server.properties");
             if (Files.isSymbolicLink(dir.resolve("config/voicechat"))) {

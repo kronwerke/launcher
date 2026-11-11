@@ -494,3 +494,8 @@ dialog.wide { width: min(64rem, calc(100vw - 2rem)); }
 dialog.wide .actions input[type=text] { flex: 1; min-width: 10rem; }
 .logsearch { max-height: 60vh; min-height: 8rem; border-radius: var(--r-s); }
 .logsearch .file-sep { color: var(--gold); padding-top: 0.6rem; }
+
+/* chronik */
+.grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.75rem 1rem; }
+.chronik-form details { margin: 0.75rem 0; }
+.chronik-form summary { cursor: pointer; }

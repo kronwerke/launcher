@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- Chronik in the console (page "Chronik", for roles with "players"): who built, broke, took or wrote what, on every server at once, merged by time with the server as a column. Search by player, time, action, block or item, one server or all, or type a query as in game. With "command", a rollback of what the search shows runs per server in the same two steps as in game: the preview first, then confirm. (R3-08)
+- Before every start the launcher writes Chronik's API port (the server's RCON port plus 1000) and its own token (`chronik.token` next to launcher.properties) into the server's `config/chronik.toml`.
+
 ## 0.8.2
 
 - A scheduled restart of main together with side worlds stops the side worlds first, while main still takes their players' state, then restarts main and starts the side worlds once main runs again. Before, all went down at once. (R3-01)

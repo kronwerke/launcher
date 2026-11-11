@@ -247,6 +247,14 @@ final class Api {
                 launcher(r, p.length > 1 ? p[1] : "");
                 return;
             }
+            case "chronik" -> {
+                need(r, "players");
+                String q = r.q("q", "").trim();
+                if (q.isEmpty()) throw new IllegalArgumentException("a query, like u:Name t:2h");
+                int limit = (int) Math.max(1, Math.min(1000, Long.parseLong(r.q("limit", "300"))));
+                r.ok(de.kronwerke.launcher.ChronikLink.lookup(fleet, q, r.q("server", ""), limit));
+                return;
+            }
             case "audit" -> {
                 need(r, "read");
                 r.ok(web.audit.last((int) Math.min(1000, Long.parseLong(r.q("n", "200")))));
