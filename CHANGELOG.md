@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+
+- Chronik in the console: plain HTTP/1.1 to the servers, and the answer names why a server did not answer.
+
 ## 0.9.1
 
 - Chronik's port and token go to each server in its environment (`CHRONIK_WEB_PORT`, `CHRONIK_WEB_TOKEN`, needs Chronik 1.2.1) instead of into config/chronik.toml, which the servers of a network may share.

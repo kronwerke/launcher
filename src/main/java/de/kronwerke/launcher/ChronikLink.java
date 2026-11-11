@@ -28,7 +28,7 @@ import java.util.stream.Stream;
  * griefer into the Nether meant joining every server and typing /co l there).
  */
 public final class ChronikLink {
-    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+    private static final HttpClient HTTP = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(3)).build();
 
     private ChronikLink() {
     }
@@ -93,6 +93,7 @@ public final class ChronikLink {
         String token = token(fleet.home());
         Map<String, CompletableFuture<HttpResponse<String>>> asks = new LinkedHashMap<>();
         List<String> missing = new ArrayList<>();
+        Map<String, String> why = new LinkedHashMap<>();
         for (Server s : fleet.servers()) {
             if (!s.minecraft() || (!only.isEmpty() && !only.equals(s.name()))) continue;
             if (s.state() != Server.State.RUNNING || !installed(s.dir())) continue;
@@ -114,6 +115,7 @@ public final class ChronikLink {
                 }
                 if (res.statusCode() != 200) {
                     missing.add(e.getKey());
+                    why.put(e.getKey(), "HTTP " + res.statusCode() + " " + Json.str(body, "error", ""));
                     continue;
                 }
                 if (body.get("rows") instanceof List<?> list) {
@@ -128,12 +130,14 @@ public final class ChronikLink {
                 }
             } catch (RuntimeException ex) {
                 missing.add(e.getKey()); // not listening yet (Chronik before the first restart with a port)
+                Throwable c = ex.getCause() != null ? ex.getCause() : ex;
+                why.put(e.getKey(), c.getClass().getSimpleName() + ": " + c.getMessage());
             }
         }
         if (error != null && rows.isEmpty()) throw new IllegalArgumentException(error);
         rows.sort((a, b) -> Long.compare(num(b.get("time")), num(a.get("time"))));
         if (rows.size() > limit) rows = new ArrayList<>(rows.subList(0, limit));
-        return Json.map("rows", rows, "missing", missing, "asked", new ArrayList<>(asks.keySet()));
+        return Json.map("rows", rows, "missing", missing, "why", why, "asked", new ArrayList<>(asks.keySet()));
     }
 
     private static long num(Object o) {
