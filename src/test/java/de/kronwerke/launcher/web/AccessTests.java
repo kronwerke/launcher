@@ -21,6 +21,14 @@ public final class AccessTests {
 
     public static int run() throws Exception {
         int checks = 0;
+        // player addresses are masked, versions and times are not
+        check(Api.maskIps("Tester[/10.1.2.3:55028] logged in with entity id 17 at (3001.5, 151.0, 3000.5)").equals("Tester[/[IP]] logged in with entity id 17 at (3001.5, 151.0, 3000.5)"), "IPv4 masked");
+        check(Api.maskIps("Anna[/[2001:db8::1]:4000] logged in").equals("Anna[/[IP]] logged in"), "IPv6 masked");
+        check(Api.maskIps("NeoForge 21.1.252, Minecraft 1.21.1, [00:44:55]").equals("NeoForge 21.1.252, Minecraft 1.21.1, [00:44:55]"), "versions and times stay");
+        check(Api.isPlayerCommand("list") && Api.isPlayerCommand("kick Anna") && !Api.isPlayerCommand("listen") && !Api.isPlayerCommand("kickall"), "whole command words");
+        check("kw admin grant Anna 0 team".equals(Api.coreWhitelist("whitelist add Anna")) && "kw admin ungrant Anna".equals(Api.coreWhitelist("whitelist remove Anna"))
+                && Api.coreWhitelist("whitelist add a;b") == null, "moderator whitelist through Core");
+        checks += 5;
         Path dir = Files.createTempDirectory("kwa");
         String origin = "https://console.example";
         Access a = new Access(dir, "console.example", List.of(origin), "Test Console");

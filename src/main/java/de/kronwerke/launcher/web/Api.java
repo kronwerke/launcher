@@ -39,7 +39,62 @@ import java.util.stream.Stream;
  * the audit log.
  */
 final class Api {
+    /**
+     * Player addresses in console and log lines: only roles that look after players
+     * ("players" or "command") see them, everyone else reads [IP]. Minecraft writes them as
+     * /1.2.3.4:5678 or /[2001:db8::1]:5678.
+     */
+    static final java.util.regex.Pattern IPS = java.util.regex.Pattern.compile(
+            "(?<![\\d.])(?:\\d{1,3}\\.){3}\\d{1,3}(?::\\d{1,5})?(?![\\d.])|(?<=/)\\[[0-9a-fA-F:]*:[0-9a-fA-F:]*\\](?::\\d{1,5})?|(?<=/)[0-9a-fA-F]{1,4}(?::[0-9a-fA-F]{0,4}){2,7}(?::\\d{1,5})?");
+
+    static String maskIps(String s) {
+        return s == null ? null : IPS.matcher(s).replaceAll("[IP]");
+    }
+
+    /** Masks every string in a read result for a role that may not see player addresses. */
+    @SuppressWarnings("unchecked")
+    static Object masked(Web.Req r, Object o) {
+        if (r.who.can("players") || r.who.can("command")) return o;
+        return maskAll(o);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object maskAll(Object o) {
+        if (o instanceof String str) return maskIps(str);
+        if (o instanceof List<?> l) {
+            List<Object> out = new ArrayList<>(l.size());
+            for (Object x : l) out.add(maskAll(x));
+            return out;
+        }
+        if (o instanceof Map<?, ?> m) {
+            Map<String, Object> out = new java.util.LinkedHashMap<>();
+            for (var e : m.entrySet()) out.put(String.valueOf(e.getKey()), maskAll(e.getValue()));
+            return out;
+        }
+        return o;
+    }
+
     /** Commands someone with only "players" may run. */
+    /** Whether a command is one of PLAYER_COMMANDS: the whole command word, not a prefix of it. */
+    static boolean isPlayerCommand(String c) {
+        for (String p : PLAYER_COMMANDS) {
+            String word = p.trim();
+            if (c.equals(word) || c.startsWith(word + " ")) return true;
+        }
+        return false;
+    }
+
+    /** "whitelist add X" and "whitelist remove X" as Kronwerke Core's place commands, else null. */
+    static String coreWhitelist(String c) {
+        String[] f = c.split(" ");
+        if (f.length != 3 || !f[0].equals("whitelist") || !f[2].matches("[A-Za-z0-9_]{3,16}")) return null;
+        return switch (f[1]) {
+            case "add" -> "kw admin grant " + f[2] + " 0 team";
+            case "remove" -> "kw admin ungrant " + f[2];
+            default -> null;
+        };
+    }
+
     static final List<String> PLAYER_COMMANDS = List.of("list", "kick ", "say ", "msg ", "tell ", "w ", "whitelist add ", "whitelist remove ",
             "ban ", "pardon ");
     static final Set<String> SERVER_KEYS = Set.of("memory", "cpu.share", "autostart", "restart.on.crash", "jvm.args", "color",
@@ -480,7 +535,15 @@ final class Api {
         if (file.isEmpty()) {
             if (m.equals("GET")) {
                 need(r, "read");
-                r.ok(Json.map("backups", bk.list(s), "busy", bk.busy(s), "keep", s.config().number("backup.keep", 5)));
+                long free = -1;
+                try {
+                    java.nio.file.Path d = bk.dir(s);
+                    while (d != null && !Files.exists(d)) d = d.getParent();
+                    if (d != null) free = Files.getFileStore(d).getUsableSpace();
+                } catch (IOException ignored) {
+                    // unknown
+                }
+                r.ok(Json.map("backups", bk.list(s), "busy", bk.busy(s), "keep", s.config().number("backup.keep", 5), "free", free));
                 return;
             }
             post(m);
@@ -703,7 +766,7 @@ final class Api {
         switch (what) {
             case "console" -> {
                 need(r, "read");
-                r.ok(s.console((int) Math.min(Server.CONSOLE_LINES, Long.parseLong(r.q("n", "500")))));
+                r.ok(masked(r, s.console((int) Math.min(Server.CONSOLE_LINES, Long.parseLong(r.q("n", "500"))))));
             }
             case "metrics" -> {
                 need(r, "read");
@@ -714,9 +777,17 @@ final class Api {
                 String cmd = Json.str(r.body(), "cmd", "").trim();
                 if (cmd.startsWith("/")) cmd = cmd.substring(1);
                 if (cmd.isEmpty()) throw new IllegalArgumentException("the command is empty");
-                String c = cmd;
-                String scope = r.who.can("command") || PLAYER_COMMANDS.stream().noneMatch(c::startsWith) ? "command" : "players";
+                String c = cmd.replaceAll("\\s+", " ");
+                boolean playerCommand = isPlayerCommand(c);
+                String scope = r.who.can("command") || !playerCommand ? "command" : "players";
                 act(r, scope, "command", s.name(), c, () -> {
+                    // a moderator's whitelist goes through Kronwerke Core, so the place is counted,
+                    // shows in the bot's roster and is not taken back as a stray entry later
+                    String core = coreWhitelist(c);
+                    if (core != null && !r.who.can("command")) {
+                        String answer = s.command(core);
+                        if (answer != null && answer.trim().startsWith("OK")) return answer;
+                    }
                     String answer = s.command(c);
                     fleet.network().mirror(s, c);
                     return answer;
@@ -825,7 +896,7 @@ final class Api {
                 need(r, "read");
                 String path = r.q("path", "logs/latest.log");
                 if (!path.startsWith("logs/") && !path.startsWith("crash-reports/")) throw new IllegalArgumentException("logs and crash reports only");
-                r.ok(files.tail(path, (int) Math.min(20000, Long.parseLong(r.q("lines", "500")))));
+                r.ok(masked(r, files.tail(path, (int) Math.min(20000, Long.parseLong(r.q("lines", "500"))))));
             }
             case "crashes" -> {
                 need(r, "read");
@@ -912,7 +983,7 @@ final class Api {
             }
             case "logsearch" -> {
                 need(r, "read");
-                r.ok(logSearch(s, r.q("q", ""), (int) Math.min(1000, Long.parseLong(r.q("max", "300")))));
+                r.ok(masked(r, logSearch(s, r.q("q", ""), (int) Math.min(1000, Long.parseLong(r.q("max", "300"))))));
             }
             case "profile" -> {
                 post(m);
@@ -1350,7 +1421,8 @@ final class Api {
         List<Runnable> undo = new ArrayList<>();
         for (Server s : fleet.servers()) {
             if (!want.contains(s.name()) && !want.contains("*")) continue;
-            Consumer<String> c = line -> q.offer(frame("line", Json.map("server", s.name(), "text", line)));
+            boolean seesIps = r.who.can("players") || r.who.can("command");
+            Consumer<String> c = line -> q.offer(frame("line", Json.map("server", s.name(), "text", seesIps ? line : maskIps(line))));
             s.onConsole(c);
             undo.add(() -> s.removeConsole(c));
         }

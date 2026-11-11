@@ -102,7 +102,36 @@ public final class Sessions {
         if (now || System.currentTimeMillis() - savedAt > 30_000) save();
     }
 
+    /**
+     * Play sessions are kept as long as the logs (sessions.days in launcher.properties, 30 by
+     * default): older sessions go, and a player not seen for that long goes from the list.
+     */
+    @SuppressWarnings("unchecked")
+    synchronized void expire() {
+        long cut = System.currentTimeMillis() - java.util.concurrent.TimeUnit.DAYS.toMillis(Math.max(1, fleet.config().number("sessions.days", 30)));
+        boolean any = false;
+        for (var it = players.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            Map<String, Object> p = e.getValue();
+            if (!open.containsKey(e.getKey()) && Json.num(p, "last", 0) < cut) {
+                it.remove();
+                any = true;
+                continue;
+            }
+            if (p.get("sessions") instanceof List<?> l) {
+                List<Object> keep = new ArrayList<>();
+                for (Object o : l) if (!(o instanceof Map<?, ?> m) || Json.num((Map<String, Object>) m, "to", 0) >= cut) keep.add(o);
+                if (keep.size() != l.size()) {
+                    p.put("sessions", keep);
+                    any = true;
+                }
+            }
+        }
+        if (any) dirty = true;
+    }
+
     synchronized void save() {
+        expire();
         if (!dirty) return;
         try {
             Files.createDirectories(file.getParent());

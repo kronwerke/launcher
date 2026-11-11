@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+- Backups never fill the disk. Before one starts there must be room for one more of the size of the last one plus a margin; when there is not, the oldest backups of that server go first (the newest stays), and without room no backup is written. A half written `.zip.part` is always removed, leftovers of a crash too. `backup.dir` in `launcher.properties` puts the backups on another disk.
+- Chronik's log is consistent in a backup: the launcher asks Chronik for a snapshot (`chronik snapshot`, Chronik 1.1.0) and zips that instead of the live database; a restore puts it back as `chronik.db`. Without Chronik's answer the backup holds no Chronik log rather than a torn one. A stopped server's files go in as they are.
+- Kronwerke Core's `kronwerke/stage.txt` travels with the world in a backup and comes back with a restore.
+- A world reset stops when Kronwerke Core says it could not send the players away (`evacuate_failed`, the server they would go to is down): the world and the players' things stay. A backup Kronwerke Core asks for (before a season starts) is made at once.
+- Self updates and `launcher update` install only releases whose SHA256SUMS carries the release key's signature (`SHA256SUMS.sig`, Ed25519, the key is pinned in the launcher), whatever checksum the caller names.
+- packwiz-installer is pinned to 0.5.14 and the bootstrap to 0.0.3, both checked against a SHA-256 in the launcher; a file that does not match is downloaded again or refused.
+- Player addresses in the console, the logs and the log search show as `[IP]` for roles without the players or command scope. Play sessions are kept `sessions.days` (30) days.
+- Schedules and backup names use Europe/Berlin unless `timezone` says otherwise.
+- Moderators' `whitelist add` and `whitelist remove` go through Kronwerke Core (`kw admin grant <name> 0 team`, `kw admin ungrant`), so the place is counted and shows in the bot's roster; the vanilla command is the fallback. Moderator commands match whole command words (`list`, not `listen`).
+- The console shows a server's colour and changes it, and the backups panel shows how many backups stay, changes it, and shows the free space of the backup disk.
+
 ## 0.7.3
 
 - The console's people list only shows real accounts that played on the main server: the load test's offline bots and names a command only looked up (a typo in `/whitelist add`) stay out. Whitelisted, operator, banned, linked and online players are listed as before.

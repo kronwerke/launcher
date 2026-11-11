@@ -94,8 +94,15 @@ public final class Config {
             # the container's limit.
             container.memory=
 
-            # The time zone for scheduled tasks and backup names, like Europe/Berlin. Empty: the
-            # container's (usually UTC).
+            # Where backups go, another disk if there is one: a full disk then never stops the
+            # world from saving. Empty: launcher/backups next to the servers.
+            backup.dir=
+
+            # How many days play sessions stay in the console (the people page), like the logs.
+            sessions.days=30
+
+            # The time zone for scheduled tasks and backup names, like Europe/Berlin. Empty:
+            # Europe/Berlin.
             timezone=
 
             # The address players connect to (kronwerke.net, say). Mods that move players between

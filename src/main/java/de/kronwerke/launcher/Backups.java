@@ -24,9 +24,16 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * Backups of a Minecraft server's world: saving is paused, the world is zipped into
- * launcher/backups/<server>/, saving resumes. backup.keep in the server's file says how many
- * stay (default 5). A restore stops the server, moves the current world aside (never deletes
- * it) and unpacks the backup.
+ * launcher/backups/<server>/ (or backup.dir in launcher.properties, another disk), saving
+ * resumes. backup.keep in the server's file says how many stay (default 5). A restore stops
+ * the server, moves the current world aside (never deletes it) and unpacks the backup.
+ * <p>
+ * A backup never fills the disk: before it starts, there must be room for one more of the
+ * size of the last one; when there is not, the oldest backups go first (one always stays),
+ * and when that is still not enough, no backup is written. A half written file is always
+ * removed. Chronik's live database is not copied while it is written to: Chronik writes a
+ * consistent snapshot on request, and the backup holds that one. The stage file of Kronwerke
+ * Core travels with the world, so a restored world opens the stage it was at.
  */
 public final class Backups {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -39,8 +46,16 @@ public final class Backups {
     }
 
     public Path dir(Server s) {
-        return fleet.home().resolve("backups").resolve(s.name());
+        String other = fleet.config().get("backup.dir");
+        Path root = other.isEmpty() ? fleet.home().resolve("backups") : Path.of(other);
+        return root.resolve(s.name());
     }
+
+    /** Files next to the world that belong to its state and travel with it. */
+    static final List<String> WITH_WORLD = List.of("kronwerke/stage.txt");
+    /** Chronik's live database: never copied while it is written to. */
+    static final Set<String> CHRONIK_LIVE = Set.of("chronik.db", "chronik.db-wal", "chronik.db-shm", "chronik-snapshot.done");
+    static final String CHRONIK_SNAPSHOT = "chronik-snapshot.db";
 
     /** The world folder: level-name from server.properties, "world" without one. */
     public static String levelName(Server s) {
@@ -86,6 +101,7 @@ public final class Backups {
         if (!running.add(s.name())) throw new IllegalStateException("a backup of " + s.name() + " is running");
         boolean paused = false;
         long t0 = System.currentTimeMillis();
+        Path tmp = null;
         try {
             Path world = s.dir().resolve(levelName(s));
             if (!Files.isDirectory(world)) throw new IOException("no world folder " + world.getFileName());
@@ -96,8 +112,12 @@ public final class Backups {
             }
             Path d = dir(s);
             Files.createDirectories(d);
+            makeRoom(s, d);
+            // a stopped server's Chronik files are at rest and go in as they are
+            boolean live = s.state() == Server.State.RUNNING;
+            boolean snapshot = live && paused && chronikSnapshot(s, world);
             String name = s.name() + "-" + LocalDateTime.now(fleet.schedule().zone()).format(STAMP) + ".zip";
-            Path tmp = d.resolve(name + ".part");
+            tmp = d.resolve(name + ".part");
             fleet.event("backup", s.name(), "backup started (" + why + ")");
             try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(tmp))) {
                 z.setLevel(Deflater.BEST_SPEED);
@@ -105,7 +125,11 @@ public final class Backups {
                 try (Stream<Path> walk = Files.walk(world)) {
                     for (Path p : (Iterable<Path>) walk::iterator) {
                         if (Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(p)) continue;
-                        if (p.getFileName().toString().equals("session.lock")) continue;
+                        String file = p.getFileName().toString();
+                        if (file.equals("session.lock")) continue;
+                        // Chronik: its snapshot instead of the live files, which change under the zip
+                        if (live && p.getParent().equals(world) && CHRONIK_LIVE.contains(file)) continue;
+                        if (p.getParent().equals(world) && file.equals(CHRONIK_SNAPSHOT) && !snapshot) continue;
                         z.putNextEntry(new ZipEntry(base.relativize(p).toString().replace('\\', '/')));
                         try (InputStream in = Files.newInputStream(p)) {
                             in.transferTo(z);
@@ -115,8 +139,17 @@ public final class Backups {
                         z.closeEntry();
                     }
                 }
+                for (String extra : WITH_WORLD) {
+                    Path p = s.dir().resolve(extra);
+                    if (!Files.isRegularFile(p)) continue;
+                    z.putNextEntry(new ZipEntry(extra));
+                    Files.copy(p, z);
+                    z.closeEntry();
+                }
             }
+            if (snapshot) Files.deleteIfExists(world.resolve(CHRONIK_SNAPSHOT));
             Files.move(tmp, d.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+            tmp = null;
             prune(s);
             long size = Files.size(d.resolve(name));
             String done = "backup " + name + " (" + (size >> 20) + " MB, " + (System.currentTimeMillis() - t0) / 1000 + " s)";
@@ -128,6 +161,14 @@ public final class Backups {
             fleet.alerts().send("backup-failed", s.name(), "backup failed: " + e.getMessage());
             throw new IllegalStateException("backup failed: " + e.getMessage(), e);
         } finally {
+            // a half written backup never stays: it would take the room the next one needs
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException ignored) {
+                    // gone already
+                }
+            }
             if (paused) {
                 try {
                     s.command("save-on");
@@ -137,6 +178,82 @@ public final class Backups {
             }
             running.remove(s.name());
         }
+    }
+
+    /**
+     * Room for one more backup of the size of the newest one, plus a margin: when the disk is
+     * short, the oldest backups of this server go first (the newest stays). Leftover .part files
+     * of a crash go too. Without enough room in the end, no backup is started.
+     */
+    void makeRoom(Server s, Path d) throws IOException {
+        try (Stream<Path> st = Files.list(d)) {
+            for (Path p : st.filter(p -> p.getFileName().toString().endsWith(".zip.part")).toList()) Files.deleteIfExists(p);
+        }
+        List<Path> all = backups(d);
+        long need = all.isEmpty() ? worldSize(s) / 2 : Files.size(all.get(0));
+        need += need / 5 + (256L << 20); // a fifth more, and room for the server to keep saving
+        java.nio.file.FileStore store = Files.getFileStore(d);
+        for (int i = all.size() - 1; i >= 1 && store.getUsableSpace() < need; i--) {
+            fleet.event("backup", s.name(), "short on disk space: removed the old backup " + all.get(i).getFileName());
+            Files.deleteIfExists(all.get(i));
+        }
+        if (store.getUsableSpace() < need) {
+            throw new IOException("not enough disk space for a backup: " + (store.getUsableSpace() >> 20) + " MB free, about " + (need >> 20) + " MB needed");
+        }
+    }
+
+    private static List<Path> backups(Path d) throws IOException {
+        List<Path> all = new ArrayList<>();
+        if (!Files.isDirectory(d)) return all;
+        try (Stream<Path> st = Files.list(d)) {
+            st.filter(p -> p.getFileName().toString().endsWith(".zip")).forEach(all::add);
+        }
+        all.sort(Comparator.comparing(Path::getFileName).reversed());
+        return all;
+    }
+
+    private static long worldSize(Server s) {
+        try (Stream<Path> walk = Files.walk(s.dir().resolve(levelName(s)))) {
+            return walk.filter(Files::isRegularFile).mapToLong(p -> {
+                try {
+                    return Files.size(p);
+                } catch (IOException e) {
+                    return 0;
+                }
+            }).sum();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Asks Chronik (when the server has it) for a consistent copy of its database, written next
+     * to the live one as chronik-snapshot.db, and waits up to two minutes for it. False without
+     * Chronik or when it did not answer: the backup then holds no Chronik log at all rather than
+     * a torn one.
+     */
+    boolean chronikSnapshot(Server s, Path world) {
+        if (!Files.exists(world.resolve("chronik.db"))) return false;
+        Path done = world.resolve("chronik-snapshot.done");
+        try {
+            Files.deleteIfExists(done);
+            Files.deleteIfExists(world.resolve(CHRONIK_SNAPSHOT));
+            String out = s.command("chronik snapshot");
+            if (out == null || !out.contains("OK")) {
+                fleet.event("backup", s.name(), "Chronik made no snapshot (" + (out == null ? "" : out.trim()) + "); the backup holds no Chronik log");
+                return false;
+            }
+            for (int i = 0; i < 240; i++) {
+                if (Files.exists(done)) return Files.exists(world.resolve(CHRONIK_SNAPSHOT));
+                Thread.sleep(500);
+            }
+            fleet.event("backup", s.name(), "Chronik's snapshot took longer than two minutes; the backup holds no Chronik log");
+        } catch (IOException | RuntimeException e) {
+            fleet.event("backup", s.name(), "Chronik snapshot failed: " + e.getMessage());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return false;
     }
 
     /** Keeps the newest backup.keep backups of a server. */
@@ -172,7 +289,10 @@ public final class Backups {
             try (ZipInputStream in = new ZipInputStream(Files.newInputStream(zip))) {
                 for (ZipEntry e; (e = in.getNextEntry()) != null; ) {
                     Path to = root.resolve(e.getName()).normalize();
-                    if (!to.startsWith(root.resolve(level))) continue; // only the world, nothing outside it
+                    // Chronik's snapshot becomes its database again
+                    if (to.equals(root.resolve(level).resolve(CHRONIK_SNAPSHOT))) to = root.resolve(level).resolve("chronik.db");
+                    // only the world and the files that travel with it, nothing else
+                    if (!to.startsWith(root.resolve(level)) && !WITH_WORLD.contains(e.getName())) continue;
                     if (e.isDirectory()) {
                         Files.createDirectories(to);
                         continue;
@@ -202,8 +322,13 @@ public final class Backups {
         try {
             boolean was = s.wanted();
             if (s.state() == Server.State.RUNNING) {
-                boolean moved = fleet.network().evacuate(s, 60_000);
-                fleet.event("reset", s.name(), moved ? "players sent away" : "no mod to send players away; they are kicked by the stop");
+                Network.Evacuation ev = fleet.network().evacuate(s, 60_000);
+                if (ev == Network.Evacuation.FAILED) {
+                    String why = fleet.network().evacuationReason(s);
+                    fleet.alerts().send("reset", s.name(), "world reset called off: " + why);
+                    throw new IllegalStateException("the players could not be sent away (" + why + "), the world stays; try again when the network is up");
+                }
+                fleet.event("reset", s.name(), ev == Network.Evacuation.MOVED ? "players sent away" : "no mod to send players away; they are kicked by the stop");
             }
             s.stop();
             String level = levelName(s);

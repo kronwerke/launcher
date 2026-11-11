@@ -25,6 +25,12 @@ import java.util.stream.Stream;
  */
 public final class Updater {
     public static final String REPO = "kronwerke/launcher";
+    /**
+     * The Ed25519 public key the release workflow signs SHA256SUMS with (SHA256SUMS.sig). A
+     * release without a valid signature is never installed, whoever asks for it: the console,
+     * the bot over the link, or someone who could publish a release on the repository.
+     */
+    public static final String RELEASE_KEY = "ZEQjgaExXr3UULiDXHjYaMVAEt2tD3vupI37zW/934k=";
 
     /** Where releases come from: update.repo (owner/name on GitHub), this project by default. */
     public static String prefix(Config cfg) {
@@ -40,7 +46,12 @@ public final class Updater {
     public static Object install(Fleet fleet, String from, String sha256, boolean reload) throws Exception {
         String prefix = prefix(fleet.config());
         if (!from.startsWith(prefix)) throw new IllegalArgumentException("updates only come from " + prefix);
-        if (!sha256.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("sha256 missing");
+        // the checksum that counts is the one in the signed SHA256SUMS of the same release
+        String base = from.substring(0, from.lastIndexOf('/') + 1);
+        String name = from.substring(from.lastIndexOf('/') + 1);
+        String signed = signedSum(base, name);
+        if (!sha256.isEmpty() && !sha256.equals(signed)) throw new IOException("the checksum asked for is not the one the release signed");
+        sha256 = signed;
         Path own = Boot.ownJar();
         if (own == null) throw new IllegalStateException("not running from a jar");
         Path dir = jars(fleet.home());
@@ -77,6 +88,43 @@ public final class Updater {
             fleet.reload();
         });
         return "installed, reloading now; the servers keep running";
+    }
+
+    /** The checksum of a file of a release, from its SHA256SUMS after the signature over it checked out. */
+    static String signedSum(String base, String file) throws Exception {
+        HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(Duration.ofSeconds(20)).build();
+        byte[] sums = fetch(http, base + "SHA256SUMS", 1 << 16);
+        byte[] sig = fetch(http, base + "SHA256SUMS.sig", 1024);
+        if (!verify(sums, sig, RELEASE_KEY)) throw new IOException("the release is not signed with the Kronwerke release key, not installing");
+        for (String l : new String(sums, java.nio.charset.StandardCharsets.UTF_8).split("\n")) {
+            String[] f = l.trim().split("\\s+");
+            if (f.length == 2 && f[1].replace("*", "").equals(file) && f[0].matches("[0-9a-f]{64}")) return f[0];
+        }
+        throw new IOException("the signed SHA256SUMS has no line for " + file);
+    }
+
+    /** Ed25519 over the bytes, with a raw 32 byte public key in base64. */
+    static boolean verify(byte[] data, byte[] sig, String rawKey) {
+        try {
+            byte[] raw = java.util.Base64.getDecoder().decode(rawKey);
+            byte[] der = new byte[12 + raw.length];
+            System.arraycopy(HexFormat.of().parseHex("302a300506032b6570032100"), 0, der, 0, 12);
+            System.arraycopy(raw, 0, der, 12, raw.length);
+            java.security.PublicKey key = java.security.KeyFactory.getInstance("Ed25519").generatePublic(new java.security.spec.X509EncodedKeySpec(der));
+            java.security.Signature v = java.security.Signature.getInstance("Ed25519");
+            v.initVerify(key);
+            v.update(data);
+            return v.verify(sig);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static byte[] fetch(HttpClient http, String url, int limit) throws Exception {
+        HttpResponse<byte[]> r = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(1)).build(), HttpResponse.BodyHandlers.ofByteArray());
+        if (r.statusCode() != 200) throw new IOException(url.substring(url.lastIndexOf('/') + 1) + ": HTTP " + r.statusCode());
+        if (r.body().length > limit) throw new IOException(url.substring(url.lastIndexOf('/') + 1) + " is too large");
+        return r.body();
     }
 
     /** Where installed launcher jars live; Boot looks in the same places. */

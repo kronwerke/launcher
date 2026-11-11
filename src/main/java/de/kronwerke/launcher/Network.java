@@ -606,22 +606,38 @@ public final class Network {
 
     // ---- evacuation ----
 
-    private final Map<String, java.util.concurrent.CompletableFuture<Boolean>> evacuations = new ConcurrentHashMap<>();
+    private final Map<String, java.util.concurrent.CompletableFuture<String>> evacuations = new ConcurrentHashMap<>();
+
+    /** How an evacuation went: the players left, no mod could send them, or the mod could not. */
+    public enum Evacuation { MOVED, NO_MOD, FAILED }
+
+    /** Why the last evacuation of a server failed, as its mod said. */
+    private final Map<String, String> evacuationReasons = new ConcurrentHashMap<>();
+
+    public String evacuationReason(Server s) {
+        return evacuationReasons.getOrDefault(s.name(), "");
+    }
 
     /**
      * Asks the mod of a server to send every player to another server of the network (before a
-     * world reset), and waits until it says done. False without a mod on the bus or after the time.
+     * world reset), and waits until it says done. FAILED when the mod says it cannot (the
+     * server the players would go to is down): then the world must not be reset, the players'
+     * things would go with it.
      */
-    public boolean evacuate(Server s, long millis) {
+    public Evacuation evacuate(Server s, long millis) {
         Peer p = peers.get(s.name());
-        if (p == null) return false;
-        var f = new java.util.concurrent.CompletableFuture<Boolean>();
+        if (p == null) return Evacuation.NO_MOD;
+        var f = new java.util.concurrent.CompletableFuture<String>();
         evacuations.put(s.name(), f);
+        evacuationReasons.remove(s.name());
         p.send(Json.map("op", "evacuate"));
         try {
-            return f.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            String failed = f.get(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (failed == null) return Evacuation.MOVED;
+            evacuationReasons.put(s.name(), failed);
+            return Evacuation.FAILED;
         } catch (Exception e) {
-            return false;
+            return Evacuation.NO_MOD;
         } finally {
             evacuations.remove(s.name());
         }
@@ -682,7 +698,24 @@ public final class Network {
             case "event" -> fleet.event("bus", s.name(), Json.str(m, "text", ""));
             case "evacuated" -> {
                 var f = evacuations.get(s.name());
-                if (f != null) f.complete(true);
+                if (f != null) f.complete(null);
+            }
+            case "evacuate_failed" -> {
+                String why = Json.str(m, "reason", "the mod could not send the players away");
+                var f = evacuations.get(s.name());
+                if (f != null) f.complete(why);
+                fleet.event("reset", s.name(), "evacuation failed: " + why);
+            }
+            case "backup" -> {
+                // the mod asks for a backup (Kronwerke Core before a season starts)
+                String why = Json.str(m, "reason", "asked by the server");
+                fleet.submit(() -> {
+                    try {
+                        fleet.backups().run(s, why);
+                    } catch (RuntimeException e) {
+                        fleet.event("backup", s.name(), "the backup the server asked for failed: " + e.getMessage());
+                    }
+                });
             }
             default -> throw new IllegalArgumentException("unknown op " + op);
         }

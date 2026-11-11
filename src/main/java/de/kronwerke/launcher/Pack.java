@@ -1,5 +1,9 @@
 package de.kronwerke.launcher;
 
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,9 +24,12 @@ import java.util.regex.Pattern;
 public final class Pack {
     static final String BOOTSTRAP_URL =
             "https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar";
-    // fetched directly so the bootstrap never needs GitHub's API, which limits hosts that share an address
+    // fetched directly so the bootstrap never needs GitHub's API, which limits hosts that share an address;
+    // pinned to one version and checked, so no upstream release reaches the servers unseen
     static final String INSTALLER_URL =
-            "https://github.com/packwiz/packwiz-installer/releases/latest/download/packwiz-installer.jar";
+            "https://github.com/packwiz/packwiz-installer/releases/download/v0.5.14/packwiz-installer.jar";
+    static final String BOOTSTRAP_SHA256 = "a8fbb24dc604278e97f4688e82d3d91a318b98efc08d5dbfcbcbcab6443d116c";
+    static final String INSTALLER_SHA256 = "c9f646908d340d84773948a9a7d98bc1dae250d35e1016dc6e2b8459760b5598";
     static final String NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/net/neoforged/neoforge/";
 
     private final Path root;
@@ -71,6 +78,11 @@ public final class Pack {
     }
 
     void download(String url, Path to) throws IOException, InterruptedException {
+        download(url, to, null);
+    }
+
+    /** Downloads a file; with a checksum, a file that does not match is thrown away and never used. */
+    void download(String url, Path to, String sha256) throws IOException, InterruptedException {
         Path tmp = to.resolveSibling(to.getFileName() + ".part");
         HttpResponse<Path> r = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(5)).build(),
                 HttpResponse.BodyHandlers.ofFile(tmp));
@@ -78,21 +90,39 @@ public final class Pack {
             Files.deleteIfExists(tmp);
             throw new IOException("GET " + url + ": HTTP " + r.statusCode());
         }
+        if (sha256 != null && !sha256.equals(sha256(tmp))) {
+            Files.deleteIfExists(tmp);
+            throw new IOException(to.getFileName() + " from " + url + " does not match its pinned checksum, not using it");
+        }
         Files.move(tmp, to, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    static String sha256(Path file) throws IOException {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            try (InputStream in = Files.newInputStream(file)) {
+                byte[] buf = new byte[1 << 16];
+                for (int n; (n = in.read(buf)) > 0; ) md.update(buf, 0, n);
+            }
+            return HexFormat.of().formatHex(md.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException(e);
+        }
+    }
+
+    /** A pinned jar: kept when it matches, downloaded again when it is missing or does not. */
+    private void pinned(String what, String url, Path to, String sha) throws IOException, InterruptedException {
+        if (Files.exists(to) && sha.equals(sha256(to))) return;
+        log.accept("Downloading " + what);
+        download(url, to, sha);
     }
 
     /** Runs packwiz-installer for the server side of the pack. */
     public void update(String url) throws IOException, InterruptedException {
         Path boot = root.resolve("packwiz-installer-bootstrap.jar");
-        if (!Files.exists(boot)) {
-            log.accept("Downloading packwiz-installer-bootstrap");
-            download(BOOTSTRAP_URL, boot);
-        }
+        pinned("packwiz-installer-bootstrap 0.0.3", BOOTSTRAP_URL, boot, BOOTSTRAP_SHA256);
         Path installer = root.resolve("packwiz-installer.jar");
-        if (!Files.exists(installer)) {
-            log.accept("Downloading packwiz-installer");
-            download(INSTALLER_URL, installer);
-        }
+        pinned("packwiz-installer 0.5.14", INSTALLER_URL, installer, INSTALLER_SHA256);
         log.accept("Updating the pack from " + url);
         int code = run(List.of(java, "-jar", boot.toString(), "--bootstrap-no-update", "-g", "-s", "server", url));
         if (code != 0) throw new IOException("packwiz-installer exited with " + code);

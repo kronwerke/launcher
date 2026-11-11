@@ -1,6 +1,6 @@
 # A release is what a server downloads as its jar, and what `!mc launcher-update` installs.
 # Start one by pushing a tag v*, or from the Actions tab with a version. It is published
-# only after the jar and SHA256SUMS are attached.
+# only after the jar, SHA256SUMS and its signature are attached.
 name: release
 
 on:
@@ -41,6 +41,18 @@ jobs:
           test "$(java -jar build/launcher.jar version)" = "${VERSION#v}"
           mkdir dist && cp build/launcher.jar dist/
           cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      # the running copies install only releases whose SHA256SUMS carries this signature
+      - name: sign
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          test -n "$RELEASE_SIGNING_KEY" || { echo "the RELEASE_SIGNING_KEY secret is missing" >&2; exit 1; }
+          umask 077
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release.pem"
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/release.pem" -rawin -in dist/SHA256SUMS -out dist/SHA256SUMS.sig
+          rm -f "$RUNNER_TEMP/release.pem"
+          test "$(wc -c < dist/SHA256SUMS.sig)" -eq 64
 
       - name: notes
         run: awk -v h="## ${VERSION#v}" '$0 == h { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md

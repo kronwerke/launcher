@@ -37,9 +37,10 @@ public final class Schedule {
     public ZoneId zone() {
         String z = fleet.config().get("timezone");
         try {
-            return z.isEmpty() ? ZoneId.systemDefault() : ZoneId.of(z);
+            // Europe/Berlin unless set: containers run in UTC, the team and the players do not
+            return ZoneId.of(z.isEmpty() ? "Europe/Berlin" : z);
         } catch (RuntimeException e) {
-            return ZoneId.systemDefault();
+            return ZoneId.of("Europe/Berlin");
         }
     }
 

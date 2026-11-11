@@ -29,6 +29,7 @@ public final class Tests {
         bootPicksTheCurrentJar();
         networkReadsConsoles();
         scheduleFindsTheNextTime();
+        releaseSignatures();
         passed += de.kronwerke.launcher.web.AccessTests.run();
         System.out.println(passed + " checks passed");
     }
@@ -274,5 +275,14 @@ public final class Tests {
         check(Schedule.next(three, now).getDayOfMonth() == 8, "every 3 days: the first day");
         check(Schedule.next(three, now.withDayOfMonth(8).withHour(6)).getDayOfMonth() == 11, "every 3 days: three days on");
         check(Schedule.next(three, now.withDayOfMonth(12)).getDayOfMonth() == 14, "every 3 days: counted from the first day");
+    }
+
+    /** A signature made with the release key by OpenSSL checks out; a changed text or another key does not. */
+    static void releaseSignatures() {
+        byte[] text = "test\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] sig = java.util.Base64.getDecoder().decode("6iNM14aqi5nxOW6AbBFiOIYOv8M/LJaziQWF9VJi1KSc/Pg1QRRJ4FmRG0ddMxy7ik18g7lsmWMphgkJ/DRRBA==");
+        check(Updater.verify(text, sig, Updater.RELEASE_KEY), "release key verifies its own signature");
+        check(!Updater.verify("test!\n".getBytes(java.nio.charset.StandardCharsets.UTF_8), sig, Updater.RELEASE_KEY), "a changed text fails");
+        check(!Updater.verify(text, sig, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="), "another key fails");
     }
 }

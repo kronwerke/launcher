@@ -702,6 +702,18 @@ const EN = {
   "Meldungen": "Alerts",
   "An einen Discord-Webhook oder jede andere https-Adresse.": "To a Discord webhook or any other https address.",
   "Zeitzone ": "Time zone ",
+  "Farbe": "Colour",
+  "keine": "none",
+  "Farbe von ": "Colour of ",
+  "Für Portale, Reiseanzeige und Tabliste. Leer lässt sie weg.": "For portals, the travel screen and the tab list. Empty leaves it out.",
+  "Zum Beispiel #e5b451": "For example #e5b451",
+  "Es bleiben ": "Keeping ",
+  " Backups": " backups",
+  ", frei: ": ", free: ",
+  "Kaum Platz für das nächste": "Hardly room for the next one",
+  "Wie viele Backups bleiben?": "How many backups stay?",
+  "Das älteste geht, wenn ein neues fertig ist. Wird der Platz knapp, gehen ältere schon vorher.": "The oldest goes when a new one is done. When space runs short, older ones go before.",
+  "1 bis 99": "1 to 99",
   ", jetzt ": ", now ",
   "Aufgabe": "Task",
   "Nächstes Mal": "Next",
@@ -2828,6 +2840,10 @@ function pageServer(main, rest) {
         const v = await confirmDialog({ title: T("Heap für ") + s.name, ok: T("Speichern"), input: { label: T("Zum Beispiel 8G"), value: s.memory } });
         if (v) set("memory", v.trim().toUpperCase(), T("Gespeichert"));
       } }, T("Ändern")) : null),
+      row(T("Farbe"), s.color ? h("span", null, h("span", { style: { display: "inline-block", width: "0.8em", height: "0.8em", borderRadius: "50%", background: s.color, marginRight: "0.4em", verticalAlign: "middle" } }), s.color) : T("keine"), can("config") ? h("button", { class: "btn small", onclick: async () => {
+        const v = await confirmDialog({ title: T("Farbe von ") + s.name, text: T("Für Portale, Reiseanzeige und Tabliste. Leer lässt sie weg."), ok: T("Speichern"), input: { label: T("Zum Beispiel #e5b451"), value: s.color || "" } });
+        if (v != null) set("color", v.trim(), T("Gespeichert"));
+      } }, T("Ändern")) : null),
       row(T("JVM-Flags"), s.jvmArgs, can("config") ? h("button", { class: "btn small", onclick: async () => {
         const v = await confirmDialog({ title: T("JVM-Flags für ") + s.name, ok: T("Speichern"), input: { label: T("Zusätzlich zu denen des Launchers"), value: s.jvmArgs || "" } });
         if (v != null) set("jvm.args", v.trim(), T("Gespeichert"));
@@ -2870,11 +2886,20 @@ function maintenancePanel(s) {
 function backupPanel(s) {
   const list = h("div");
   const make = h("button", { class: "btn", disabled: !can("power") || null }, T("Backup jetzt"));
+  // how many stay and how much room is left on the disk they go to
+  const info = h("div", { class: "body kv" });
   const draw = async () => {
     let d;
     try { d = await api("GET", "/servers/" + s.name + "/backups"); } catch (e) { return put(list, h("p", { class: "error body" }, e.message)); }
     make.disabled = d.busy || !can("power") || null;
     make.textContent = d.busy ? T("Backup läuft...") : T("Backup jetzt");
+    const newest = d.backups[0]?.size || 0;
+    put(info, h("span", { class: "muted" }, T("Es bleiben ") + d.keep + T(" Backups") + (d.free >= 0 ? T(", frei: ") + fmt.bytes(d.free) : "")),
+      h("b", { class: d.free >= 0 && newest > 0 && d.free < newest * 1.2 ? "warn-text" : "" }, d.free >= 0 && newest > 0 && d.free < newest * 1.2 ? T("Kaum Platz für das nächste") : ""),
+      can("config") ? h("button", { class: "btn small", onclick: async () => {
+        const v = await confirmDialog({ title: T("Wie viele Backups bleiben?"), text: T("Das älteste geht, wenn ein neues fertig ist. Wird der Platz knapp, gehen ältere schon vorher."), ok: T("Speichern"), input: { label: T("1 bis 99"), value: String(d.keep) } });
+        if (v) { await run(T("Gespeichert"), () => api("POST", "/servers/" + s.name + "/config", { key: "backup.keep", value: v.trim() })); draw(); }
+      } }, T("Ändern")) : h("span"));
     put(list, d.backups.length ? h("table", null, h("tbody", null, d.backups.map(b => h("tr", null,
       h("td", { class: "num" }, fmt.date(b.modified)),
       h("td", { class: "num dim" }, fmt.bytes(b.size)),
@@ -2902,7 +2927,7 @@ function backupPanel(s) {
   } }, T("Welt zurücksetzen")) : null;
   return h("section", { class: "panel" },
     h("header", null, h("div", null, h("h2", null, "Backups"), h("p", null, T("Die Welt als Zip, die neuesten bleiben (backup.keep)."))), h("div", { class: "actions" }, resetBtn, make)),
-    list);
+    info, list);
 }
 
 function toolsPanel(s) {
