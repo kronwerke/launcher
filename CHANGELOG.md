@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+
+- A new server on a network takes the network's sharing settings (chat, joins, tab list, lists, player data) from a server already on it. Before, it came with player data sharing off, so a player's inventory stayed behind at a portal to it.
+- A new server's voice port may be the same number as its game port (voice is UDP, the game TCP).
+
 ## 0.8.0
 
 - Backups never fill the disk. Before one starts there must be room for one more of the size of the last one plus a margin; when there is not, the oldest backups of that server go first (the newest stays), and without room no backup is written. A half written `.zip.part` is always removed, leftovers of a crash too. `backup.dir` in `launcher.properties` puts the backups on another disk.

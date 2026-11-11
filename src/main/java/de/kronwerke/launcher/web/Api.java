@@ -1115,11 +1115,24 @@ final class Api {
             if (!samePack) v.put("share", "-");
             String net = Json.str(b, "network", "").trim();
             if (!net.matches("[a-z0-9_-]{0,24}")) throw new IllegalArgumentException("network: lower case letters, digits, - and _");
-            if (!net.isEmpty()) v.put("network", net);
+            if (!net.isEmpty()) {
+                v.put("network", net);
+                // a server joining a network takes what the network shares from one already on it,
+                // so player data, chat and lists do not stop at the new server
+                for (Server s : fleet.servers()) {
+                    if (!net.equals(s.config().get("network"))) continue;
+                    for (String k : List.of("sync.chat", "chat.radius", "sync.joins", "sync.tablist", "sync.lists", "sync.players")) {
+                        String val = s.config().get(k);
+                        if (!val.isEmpty()) v.put(k, val);
+                    }
+                    break;
+                }
+            }
             if (Json.bool(b, "transfers", false)) v.put("transfers", "true");
             String voice = Json.str(b, "voice", "").trim();
             if (!voice.isEmpty()) {
-                if (!voice.matches("[0-9]{2,5}") || usedPorts().contains(voice) || voice.equals(port)) throw new IllegalArgumentException("voice port taken or wrong");
+                // voice is UDP, the game TCP: the same number as the server's own game port is fine
+                if (!voice.matches("[0-9]{2,5}") || usedPorts().contains(voice)) throw new IllegalArgumentException("voice port taken or wrong");
                 v.put("voice.port", voice);
             }
             String role = Json.str(b, "role", "").trim();
